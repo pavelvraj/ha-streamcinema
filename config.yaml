@@ -1,7 +1,7 @@
 name: "StreamCinema API"
-version: "0.1.1"
+version: "0.1.2"
 slug: "streamcinema"
-description: "Vlastni StreamCinema backend"
+description: "Vlastni StreamCinema backend s Webshare a Fastshare"
 arch:
   - aarch64
 startup: application
@@ -13,6 +13,10 @@ map:
 options:
   webshare_username: ""
   webshare_password: ""
+  fastshare_username: ""
+  fastshare_password: ""
 schema:
   webshare_username: str
-  webshare_password: str
+  webshare_password: password
+  fastshare_username: str
+  fastshare_password: password
