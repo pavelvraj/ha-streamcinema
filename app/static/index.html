@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StreamCinema Manager</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>StreamCinema Manager</h1>
+            <div class="search-box">
+                <input type="text" id="searchInput" placeholder="Hledat film nebo seriál...">
+                <button onclick="searchMedia()">Hledat</button>
+            </div>
+        </header>
+
+        <main>
+            <div id="loading" class="hidden">Hledám na Webshare, Fastshare a ČSFD...</div>
+            
+            <div id="results" class="grid-container">
+                <!-- Zde se dynamicky vloží výsledky -->
+            </div>
+        </main>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>

@@ -6,6 +6,9 @@ from scrapers.webshare import WebshareScraper
 from scrapers.fastshare import FastshareScraper
 from scrapers.csfd import CSFDScraper
 
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+
 # Načtení konfigurace
 OPTIONS_PATH = "/data/options.json"
 config = {}
@@ -85,8 +88,11 @@ def search_and_save(query):
 # --- Endpointy ---
 
 @app.get("/")
-def read_root():
-    return {"Status": "StreamCinema API Running"}
+async def read_index():
+    return FileResponse('/app/app/static/index.html')
+
+# Mountování statických souborů
+app.mount("/static", StaticFiles(directory="/app/app/static"), name="static")
 
 @app.get("/api/ping")
 def ping():
