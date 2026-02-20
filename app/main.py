@@ -1,10 +1,10 @@
 from fastapi import FastAPI, HTTPException, BackgroundTasks
 import sqlite3, json, os
 
-from database import init_db, get_db_connection
-from scrapers.webshare import WebshareScraper
-from scrapers.fastshare import FastshareScraper
-from scrapers.csfd import CSFDScraper
+from app.database import init_db, get_db_connection
+from app.scrapers.webshare import WebshareScraper
+from app.scrapers.fastshare import FastshareScraper
+from app.scrapers.csfd import CSFDScraper
 
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
