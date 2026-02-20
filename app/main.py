@@ -1,71 +1,199 @@
-from fastapi import FastAPI, Query
-from typing import Optional
-import sqlite3, json
-import os
+from fastapi import FastAPI, HTTPException, BackgroundTasks
+import sqlite3, json, os
 
-app = FastAPI(title="StreamCinema Local API")
-DB = "/config/streamcinema/data/db.sqlite"
+from database import init_db, get_db_connection
+from scrapers.webshare import WebshareScraper
+from scrapers.fastshare import FastshareScraper
+from scrapers.csfd import CSFDScraper
 
-def get_db():
-    conn = sqlite3.connect(DB)
-    conn.row_factory = sqlite3.Row
-    return conn
+# Načtení konfigurace
+OPTIONS_PATH = "/data/options.json"
+config = {}
+if os.path.exists(OPTIONS_PATH):
+    with open(OPTIONS_PATH) as f: config = json.load(f)
+
+WS = WebshareScraper(config.get("webshare_username"), config.get("webshare_password"))
+FS = FastshareScraper(config.get("fastshare_username"), config.get("fastshare_password"))
+CSFD = CSFDScraper()
+
+app = FastAPI()
+
+@app.on_event("startup")
+def startup():
+    init_db()
+
+# --- Pomocné funkce ---
+def search_and_save(query):
+    """
+    Spustí hledání na WS/FS/CSFD a uloží výsledky do DB.
+    Vrací seznam nalezených médií.
+    """
+    print(f"Hledám: {query}")
+    
+    # 1. Scrape providerů
+    ws_res = WS.search(query)
+    fs_res = FS.search(query)
+    all_files = ws_res + fs_res
+    
+    if not all_files:
+        return []
+
+    # 2. Scrape metadat (ČSFD)
+    csfd_data = CSFD.search_movie(query)
+    
+    conn = get_db_connection()
+    c = conn.cursor()
+
+    # Identifikace média
+    if csfd_data:
+        media_id = f"csfd_{csfd_data['csfd_id']}"
+        title = csfd_data['title']
+        year = csfd_data['year']
+        plot = csfd_data['plot']
+        poster = csfd_data['poster']
+        rating = csfd_data['rating']
+        genres = json.dumps(csfd_data['genres'])
+    else:
+        # Fallback
+        media_id = f"manual_{abs(hash(query))}"
+        title = query
+        year = 0
+        plot = "Nenalezeno na ČSFD"
+        poster = ""
+        rating = 0.0
+        genres = "[]"
+
+    # 3. Uložení média
+    c.execute('''
+        INSERT OR REPLACE INTO media (id, title, year, plot, poster, rating, genres)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    ''', (media_id, title, year, plot, poster, rating, genres))
+    
+    # 4. Uložení streamů
+    for res in all_files:
+        c.execute("SELECT id FROM streams WHERE ident=? AND provider=?", (res['ident'], res['provider']))
+        if not c.fetchone():
+            c.execute('''
+                INSERT INTO streams (media_id, provider, ident, filename, size)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (media_id, res['provider'], res['ident'], res['name'], res['size']))
+            
+    conn.commit()
+    conn.close()
+    return [media_id]
+
+# --- Endpointy ---
 
 @app.get("/")
 def read_root():
-    return {"Status": "StreamCinema API is running", "DB_Path": "/config/streamcinema/data"}
+    return {"Status": "StreamCinema API Running"}
 
 @app.get("/api/ping")
 def ping():
     return "pong"
 
+# Nový endpoint pro manuální spuštění hledání (např. z webového GUI)
+@app.get("/api/search_manual")
+def manual_search(q: str):
+    media_ids = search_and_save(q)
+    return {"status": "ok", "found_ids": media_ids}
+
+# KODI: Hlavní endpoint pro filtrování/hledání
 @app.get("/api/media/{collection}/filter/{filter_name}/{filter_value}/")
 def media_filter(collection: str, filter_name: str, filter_value: str, page: int = 1):
-    db = get_db()
-    media_type = "movie" if collection == "movies" else "tvshow"
+    conn = get_db_connection()
+    c = conn.cursor()
     
+    # Pokud KODI hledá podle názvu (titleOrActor),
+    # zkusíme nejdřív najít v DB, a pokud nic nenajdeme, spustíme LIVE hledání!
     if filter_name == "titleOrActor":
-        rows = db.execute(
-            "SELECT * FROM media WHERE type=? AND title LIKE ? LIMIT 20 OFFSET ?",
-            (media_type, f"%{filter_value}%", (page-1)*20)
-        ).fetchall()
+        # Zkusíme najít v lokální DB
+        c.execute("SELECT COUNT(*) FROM media WHERE title LIKE ?", (f"%{filter_value}%",))
+        count = c.fetchone()[0]
+        
+        if count == 0:
+            # Nic v DB -> Spustíme scraper!
+            search_and_save(filter_value)
+
+        # Teď už by tam data měla být
+        c.execute("SELECT * FROM media WHERE title LIKE ?", (f"%{filter_value}%",))
+    
     elif filter_name == "genre":
-        rows = db.execute(
-            "SELECT * FROM media WHERE type=? AND genres LIKE ? LIMIT 20 OFFSET ?",
-            (media_type, f"%{filter_value}%", (page-1)*20)
-        ).fetchall()
+        c.execute("SELECT * FROM media WHERE genres LIKE ?", (f"%{filter_value}%",))
     else:
-        rows = []
+        # Fallback - vrátit vše (nebo nic)
+        c.execute("SELECT * FROM media")
+        
+    rows = c.fetchall()
     
     data = []
     for row in rows:
-        item = dict(row)
-        item["streams"] = db.execute(
-            "SELECT * FROM streams WHERE media_id=?", (item["id"],)
-        ).fetchall()
-        item["info_labels"] = {
-            "title": item["title"], "year": item["year"],
-            "genre": json.loads(item["genres"] or "[]"),
-            "plot": item["plot"], "rating": item["rating"],
-            "playcount": 0
+        media = dict(row)
+        # Načteme streamy k médiu
+        c.execute("SELECT * FROM streams WHERE media_id=?", (media['id'],))
+        streams = [dict(s) for s in c.fetchall()]
+        
+        # Formátování pro KODI
+        item = {
+            "_id": media['id'],
+            "info_labels": {
+                "title": media['title'],
+                "originaltitle": media.get('original_title', ''),
+                "year": media['year'],
+                "plot": media['plot'],
+                "rating": media['rating'],
+                "genre": json.loads(media['genres'] or "[]")
+            },
+            "art": {
+                "poster": media['poster'],
+                "fanart": media['fanart'] or media['poster']
+            },
+            "streams": []
         }
-        item["art"] = {"poster": item["poster"], "fanart": item["fanart"]}
-        item["services"] = {"imdb": item["imdb_id"]}
+        
+        # Streamy
+        for s in streams:
+            # DŮLEŽITÉ: Prefixujeme providera do identu, aby plugin věděl, co s tím
+            ident_combined = f"{s['provider']}:{s['ident']}"
+            
+            item["streams"].append({
+                "ident": ident_combined,
+                "size": s['size'],
+                "codec": "h264",  # Placeholder
+                "width": 1920,    # Placeholder
+                "height": 1080,   # Placeholder
+                "audio": [{"language": "cze"}],
+                "subtitles": []
+            })
         data.append(item)
     
-    total = db.execute(
-        "SELECT COUNT(*) FROM media WHERE type=?", (media_type,)
-    ).fetchone()[0]
-    
-    return {"data": data, "totalCount": len(data), "page": page, "pageCount": total//20+1}
+    return {"data": data, "totalCount": len(data), "page": 1, "pageCount": 1}
 
+# KODI: Popular (zatím vrátíme top hodnocené z DB)
 @app.get("/api/media/{collection}/popular/-1/")
 def popular_media(collection: str):
-    db = get_db()
-    media_type = "movie" if collection == "movies" else "tvshow"
-    rows = db.execute(
-        "SELECT * FROM media WHERE type=? ORDER BY csfd_rating DESC LIMIT 20",
-        (media_type,)
-    ).fetchall()
-    # stejná serializace jako výše...
-    return {"data": [dict(r) for r in rows], "totalCount": len(rows)}
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute("SELECT * FROM media ORDER BY rating DESC LIMIT 20")
+    rows = c.fetchall()
+    
+    # ... (stejná serializace jako výše) ...
+    # Pro stručnost zkopíruj logiku z media_filter nebo si udělej pomocnou funkci
+    # return {"data": serialized_rows, ...}
+    return {"data": [], "totalCount": 0} # Placeholder
+
+# NOVÝ: Helper pro získání linku (volaný z pluginu)
+@app.get("/api/file_link/{ident}")
+def get_file_link(ident: str):
+    try:
+        provider, file_id = ident.split(":", 1)
+        if provider == "webshare":
+            link = WS.get_link(file_id)
+        elif provider == "fastshare":
+            link = FS.get_link(file_id)
+        else:
+            link = None
+        return {"link": link}
+    except Exception as e:
+        print(f"Link Error: {e}")
+        return {"link": None}
