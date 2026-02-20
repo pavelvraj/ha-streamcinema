@@ -1,5 +1,9 @@
 from fastapi import FastAPI, HTTPException, BackgroundTasks
-import sqlite3, json, os
+import sys,sqlite3, json, os
+
+print("PYTHONPATH:", sys.path)
+print("FILES IN /app:", os.listdir("/app"))
+print("FILES IN /app/app:", os.listdir("/app/app"))
 
 from app.database import init_db, get_db_connection
 from app.scrapers.webshare import WebshareScraper
@@ -203,3 +207,4 @@ def get_file_link(ident: str):
     except Exception as e:
         print(f"Link Error: {e}")
         return {"link": None}
+
