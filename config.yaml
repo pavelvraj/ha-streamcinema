@@ -1,0 +1,18 @@
+name: "StreamCinema API"
+version: "1.0.0"
+slug: "streamcinema"
+description: "Vlastni StreamCinema backend"
+arch:
+  - aarch64
+startup: application
+boot: auto
+ports:
+  8765/tcp: 8765
+map:
+  - config:rw
+options:
+  webshare_username: ""
+  webshare_password: ""
+schema:
+  webshare_username: str
+  webshare_password: str
