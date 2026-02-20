@@ -11,7 +11,7 @@ COPY run.sh /run.sh
 RUN chmod a+x /run.sh
 
 # Zkopírujeme celou složku app (balíček app.*)
-COPY app /app
+COPY app /app/app
 
 # Spuštění aplikace
 CMD ["/run.sh"]
