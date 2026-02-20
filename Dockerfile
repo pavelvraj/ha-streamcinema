@@ -1,16 +1,17 @@
 FROM python:3.11-alpine
 
-# Instalace potřebných knihoven
-RUN pip install --no-cache-dir fastapi uvicorn requests beautifulsoup4 lxml
-
-# Pracovní adresář
+# Pracovní adresář uvnitř kontejneru
 WORKDIR /app
+
+# Instalace potřebných knihoven
+RUN pip install --no-cache-dir fastapi uvicorn requests beautifulsoup4 lxml passlib python-multipart
 
 # Zkopírujeme spouštěcí skript
 COPY run.sh /run.sh
 RUN chmod a+x /run.sh
 
-# Zkopírujeme aplikaci (tohle budeš pushovat přes git)
-COPY app /app
+# Zkopírujeme celou složku app (balíček app.*)
+COPY app /app/app
 
-CMD [ "/run.sh" ]
+# Spuštění aplikace
+CMD ["/run.sh"]
