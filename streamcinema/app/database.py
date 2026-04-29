@@ -3,6 +3,15 @@ import os
 
 DB_PATH = os.getenv("STREAMCINEMA_DB_PATH", "/config/streamcinema/data/db.sqlite")
 
+
+STREAM_COLUMNS = {
+    "season": "INTEGER",
+    "episode": "INTEGER",
+    "status": "TEXT DEFAULT 'active'",
+    "format": "TEXT",
+    "last_checked_at": "TIMESTAMP",
+}
+
 def get_db_connection():
     # Zajistíme existenci složky
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
@@ -45,11 +54,23 @@ def init_db():
             duration INTEGER,
             width INTEGER,
             height INTEGER,
+            season INTEGER,
+            episode INTEGER,
+            status TEXT DEFAULT 'active',
+            format TEXT,
+            last_checked_at TIMESTAMP,
             audio TEXT,         -- JSON
             subtitles TEXT,     -- JSON
             FOREIGN KEY(media_id) REFERENCES media(id) ON DELETE CASCADE
         )
     ''')
+
+    existing_columns = {
+        row["name"] for row in c.execute("PRAGMA table_info(streams)").fetchall()
+    }
+    for column, definition in STREAM_COLUMNS.items():
+        if column not in existing_columns:
+            c.execute(f"ALTER TABLE streams ADD COLUMN {column} {definition}")
     
     conn.commit()
     conn.close()

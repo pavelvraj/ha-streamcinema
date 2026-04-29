@@ -3,23 +3,44 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>StreamCinema Manager</title>
+    <title>Stream Cinema</title>
     <link rel="stylesheet" href="static/style.css">
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1>StreamCinema Manager</h1>
+    <div class="app-shell">
+        <header class="topbar">
+            <div>
+                <h1>Stream Cinema</h1>
+                <p>Katalog filmů, seriálů a streamů</p>
+            </div>
             <div class="search-box">
-                <input type="text" id="searchInput" placeholder="Hledat film nebo serial...">
+                <input type="text" id="searchInput" placeholder="Hledat film nebo seriál">
                 <button type="button" onclick="searchMedia()">Hledat</button>
             </div>
         </header>
 
-        <main>
-            <div id="loading" class="hidden">Hledam na Webshare, Fastshare a CSFD...</div>
-            <div id="error" class="hidden"></div>
-            <div id="results" class="grid-container"></div>
+        <section id="status" class="status hidden"></section>
+        <section id="searchPanel" class="search-panel hidden"></section>
+
+        <main class="workspace">
+            <aside class="catalog">
+                <div class="catalog-toolbar">
+                    <h2>Katalog</h2>
+                    <select id="typeFilter" onchange="loadCatalog()">
+                        <option value="all">Vše</option>
+                        <option value="movie">Filmy</option>
+                        <option value="tvshow">Seriály</option>
+                    </select>
+                </div>
+                <input class="catalog-filter" id="catalogFilter" placeholder="Filtrovat katalog" oninput="loadCatalog()">
+                <div id="catalogList" class="catalog-list"></div>
+            </aside>
+
+            <section id="detailPanel" class="detail-panel">
+                <div class="empty-state">
+                    Vyber položku z katalogu nebo nejdřív něco vyhledej.
+                </div>
+            </section>
         </main>
     </div>
 

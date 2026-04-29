@@ -2,6 +2,17 @@
 
 This file is intentionally duplicated at the repository root for Home Assistant compatibility. The add-on changelog source is `streamcinema/CHANGELOG.md`.
 
+## 0.2.0
+
+- Added a catalog view for saved movies and TV shows.
+- Added a media detail view with poster, plot, rating, genres, and streams.
+- TV shows are grouped by season and episode based on stream filenames.
+- Search now displays found streams before saving and lets the user choose which streams to add.
+- Added stream checks that mark broken streams for removal.
+- Added single-stream removal and bulk removal of streams marked for deletion.
+- Added IMDb metadata fallback when ČSFD does not return metadata.
+- Extended the stream database model with status, format, season, episode, and last check timestamp.
+
 ## 0.1.16
 
 - Fixed Webshare login by removing the invalid `rounds` argument from `md5_crypt` and adding the Webshare `digest` field.

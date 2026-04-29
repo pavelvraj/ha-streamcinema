@@ -2,6 +2,17 @@
 
 Všechny důležité změny add-onu StreamCinema API jsou vedené v tomto souboru.
 
+## 0.2.0
+
+- Přidán katalog uložených filmů a seriálů.
+- Přidán detail média s posterem, popisem, hodnocením, žánry a streamy.
+- Seriály se zobrazují po sériích a dílech podle názvů streamů.
+- Vyhledávání nyní zobrazí nalezené streamy před uložením a dovolí vybrat konkrétní položky.
+- Přidána kontrola streamů s označením chybných položek k vyřazení.
+- Přidáno samostatné vyřazení streamu i hromadné vyřazení označených streamů.
+- Přidán IMDb fallback metadat, když ČSFD nic nevrátí.
+- Rozšířena databáze streamů o stav, formát, sezónu, díl a čas poslední kontroly.
+
 ## 0.1.16
 
 - Opraven Webshare login: odstraněn neplatný parametr `rounds` u `md5_crypt` a doplněn Webshare `digest`.
