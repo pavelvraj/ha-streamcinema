@@ -2,6 +2,12 @@
 
 Všechny důležité změny add-onu StreamCinema API jsou vedené v tomto souboru.
 
+## 0.1.15
+
+- Opraveno otevření webového GUI přes Home Assistant Ingress, který posílal požadavek na cestu `//`.
+- Backend nyní normalizuje vícenásobná lomítka v cestě před routováním.
+- Odebrána explicitní volba `ingress_entry: /`, která mohla vést k dvojitému lomítku.
+
 ## 0.1.14
 
 - Přidána kopie changelogu také do rootu repozitáře pro kompatibilitu s Home Assistant zobrazením `Seznam změn`.

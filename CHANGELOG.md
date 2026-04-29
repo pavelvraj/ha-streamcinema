@@ -2,6 +2,12 @@
 
 This file is intentionally duplicated at the repository root for Home Assistant compatibility. The add-on changelog source is `streamcinema/CHANGELOG.md`.
 
+## 0.1.15
+
+- Fixed opening the web GUI through Home Assistant Ingress when Supervisor requested `//`.
+- The backend now normalizes duplicate slashes before routing.
+- Removed the explicit `ingress_entry: /` option, which could contribute to the double slash path.
+
 ## 0.1.14
 
 - Added a root-level changelog copy so Home Assistant can display the `Seznam změn` link even when it looks at repository-level metadata.

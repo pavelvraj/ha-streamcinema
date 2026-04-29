@@ -38,6 +38,15 @@ CSFD = CSFDScraper()
 app = FastAPI(title="StreamCinema API")
 
 
+@app.middleware("http")
+async def normalize_ingress_path(request, call_next):
+    path = request.scope.get("path", "/")
+    while "//" in path:
+        path = path.replace("//", "/")
+    request.scope["path"] = path or "/"
+    return await call_next(request)
+
+
 @app.on_event("startup")
 def startup():
     init_db()
