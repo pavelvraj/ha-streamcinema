@@ -2,6 +2,13 @@
 
 This file is intentionally duplicated at the repository root for Home Assistant compatibility. The add-on changelog source is `streamcinema/CHANGELOG.md`.
 
+## 0.2.1
+
+- Fixed the `Hledat` button in the Home Assistant Ingress GUI.
+- Removed inline `onclick`/`onchange` handlers from the frontend.
+- Rewrote the frontend to use more compatible JavaScript without `?.`, `??`, and `replaceAll`.
+- The search button now shows `Hledám...` while a search request is running.
+
 ## 0.2.0
 
 - Added a catalog view for saved movies and TV shows.

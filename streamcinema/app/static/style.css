@@ -43,6 +43,11 @@ button:hover {
     filter: brightness(1.08);
 }
 
+button:disabled {
+    cursor: progress;
+    opacity: 0.65;
+}
+
 button.danger {
     background: var(--danger);
 }

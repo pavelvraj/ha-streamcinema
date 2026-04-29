@@ -1,335 +1,423 @@
-const API_URL = "api";
+(function () {
+    var API_URL = "api";
+    var catalogItems = [];
+    var currentSearch = null;
+    var selectedMediaId = null;
 
-let catalogItems = [];
-let currentSearch = null;
-let selectedMediaId = null;
-
-function $(id) {
-    return document.getElementById(id);
-}
-
-function showStatus(message, type = "info") {
-    const node = $("status");
-    node.textContent = message || "";
-    node.className = message ? `status ${type}` : "status hidden";
-}
-
-async function fetchJson(url, options = {}) {
-    const response = await fetch(url, options);
-    if (!response.ok) {
-        const text = await response.text();
-        throw new Error(text || `HTTP ${response.status}`);
+    function el(id) {
+        return document.getElementById(id);
     }
-    return response.json();
-}
 
-function formatBytes(value) {
-    const bytes = Number(value || 0);
-    if (!bytes) return "-";
-    const units = ["B", "KB", "MB", "GB", "TB"];
-    let size = bytes;
-    let index = 0;
-    while (size >= 1024 && index < units.length - 1) {
-        size /= 1024;
-        index += 1;
+    function showStatus(message, type) {
+        var node = el("status");
+        if (!node) return;
+        node.textContent = message || "";
+        node.className = message ? "status " + (type || "info") : "status hidden";
     }
-    return `${size.toFixed(index ? 1 : 0)} ${units[index]}`;
-}
 
-function formatDuration(value) {
-    const seconds = Number(value || 0);
-    if (!seconds) return "-";
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    return hours ? `${hours} h ${minutes} min` : `${minutes} min`;
-}
+    function setSearching(isSearching) {
+        var button = el("searchButton");
+        if (!button) return;
+        button.disabled = isSearching;
+        button.textContent = isSearching ? "Hledám..." : "Hledat";
+    }
 
-function escapeHtml(value) {
-    return String(value ?? "")
-        .replaceAll("&", "&amp;")
-        .replaceAll("<", "&lt;")
-        .replaceAll(">", "&gt;")
-        .replaceAll('"', "&quot;")
-        .replaceAll("'", "&#039;");
-}
+    function requestJson(url, options) {
+        return fetch(url, options || {}).then(function (response) {
+            if (!response.ok) {
+                return response.text().then(function (text) {
+                    throw new Error(text || ("HTTP " + response.status));
+                });
+            }
+            return response.json();
+        });
+    }
 
-async function loadCatalog() {
-    const q = $("catalogFilter")?.value.trim() || "";
-    const mediaType = $("typeFilter")?.value || "all";
-    const params = new URLSearchParams({ media_type: mediaType });
-    if (q) params.set("q", q);
-
-    try {
-        const data = await fetchJson(`${API_URL}/catalog?${params.toString()}`);
-        catalogItems = data.data || [];
-        renderCatalog();
-        if (!selectedMediaId && catalogItems.length) {
-            showDetail(catalogItems[0]._id);
+    function formatBytes(value) {
+        var bytes = Number(value || 0);
+        if (!bytes) return "-";
+        var units = ["B", "KB", "MB", "GB", "TB"];
+        var size = bytes;
+        var index = 0;
+        while (size >= 1024 && index < units.length - 1) {
+            size = size / 1024;
+            index += 1;
         }
-    } catch (error) {
-        console.error(error);
-        showStatus("Nepodařilo se načíst katalog.", "error");
-    }
-}
-
-function renderCatalog() {
-    const container = $("catalogList");
-    if (!catalogItems.length) {
-        container.innerHTML = `<div class="empty-list">Katalog je prázdný.</div>`;
-        return;
+        return size.toFixed(index ? 1 : 0) + " " + units[index];
     }
 
-    container.innerHTML = catalogItems.map((item) => {
-        const active = item._id === selectedMediaId ? "active" : "";
-        const poster = item.poster || "";
-        const typeLabel = item.type === "tvshow" ? "Seriál" : "Film";
-        return `
-            <button class="catalog-item ${active}" onclick="showDetail('${escapeHtml(item._id)}')">
-                <div class="thumb">${poster ? `<img src="${escapeHtml(poster)}" alt="">` : ""}</div>
-                <div>
-                    <strong>${escapeHtml(item.title)}</strong>
-                    <span>${typeLabel} · ${item.year || "-"} · ${item.stream_count || 0} streamů</span>
-                </div>
-            </button>
-        `;
-    }).join("");
-}
-
-async function searchMedia() {
-    const query = $("searchInput").value.trim();
-    if (!query) return;
-
-    showStatus("Vyhledávám streamy a metadata...", "info");
-    $("searchPanel").classList.add("hidden");
-    $("searchPanel").innerHTML = "";
-
-    try {
-        currentSearch = await fetchJson(`${API_URL}/search?q=${encodeURIComponent(query)}`);
-        renderSearchResults();
-        showStatus("", "info");
-    } catch (error) {
-        console.error(error);
-        showStatus("Vyhledávání selhalo. Zkontroluj log add-onu.", "error");
-    }
-}
-
-function renderSearchResults() {
-    const panel = $("searchPanel");
-    const metadata = currentSearch?.metadata;
-    const streams = currentSearch?.streams || [];
-    if (!metadata) {
-        panel.innerHTML = "";
-        panel.classList.add("hidden");
-        return;
+    function formatDuration(value) {
+        var seconds = Number(value || 0);
+        if (!seconds) return "-";
+        var hours = Math.floor(seconds / 3600);
+        var minutes = Math.floor((seconds % 3600) / 60);
+        return hours ? (hours + " h " + minutes + " min") : (minutes + " min");
     }
 
-    const poster = metadata.poster || "";
-    panel.innerHTML = `
-        <div class="search-header">
-            <div class="poster-small">${poster ? `<img src="${escapeHtml(poster)}" alt="">` : ""}</div>
-            <div>
-                <h2>${escapeHtml(metadata.title)}</h2>
-                <p>${metadata.year || "-"} · ${metadata.type === "tvshow" ? "Seriál" : "Film"} · ${metadata.rating || 0}% · ${metadata.source.toUpperCase()}</p>
-                <p>${escapeHtml(metadata.plot || "Bez popisu.")}</p>
-            </div>
-        </div>
-        <div class="stream-actions">
-            <label><input type="checkbox" id="selectAllStreams" onchange="toggleSearchStreams(this.checked)"> Vybrat vše</label>
-            <button type="button" onclick="saveSelectedStreams()">Zařadit vybrané do sbírky</button>
-        </div>
-        <div class="stream-table">${renderSearchStreamRows(streams)}</div>
-    `;
-    panel.classList.remove("hidden");
-}
-
-function renderSearchStreamRows(streams) {
-    if (!streams.length) {
-        return `<div class="empty-list">Nebyly nalezeny žádné streamy.</div>`;
+    function escapeHtml(value) {
+        return String(value == null ? "" : value)
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
     }
 
-    return streams.map((stream, index) => `
-        <label class="stream-row selectable">
-            <input type="checkbox" class="search-stream-check" data-index="${index}">
-            <div>
-                <strong>${escapeHtml(stream.filename)}</strong>
-                <span>${escapeHtml(stream.provider)} · ${escapeHtml(stream.format || "-")} · ${formatBytes(stream.size)} · ${stream.width || "-"}x${stream.height || "-"}</span>
-                ${stream.season && stream.episode ? `<span>S${stream.season} E${stream.episode}</span>` : ""}
-            </div>
-        </label>
-    `).join("");
-}
-
-function toggleSearchStreams(checked) {
-    document.querySelectorAll(".search-stream-check").forEach((node) => {
-        node.checked = checked;
-    });
-}
-
-async function saveSelectedStreams() {
-    const checks = [...document.querySelectorAll(".search-stream-check:checked")];
-    const streams = checks.map((node) => currentSearch.streams[Number(node.dataset.index)]);
-    if (!streams.length) {
-        showStatus("Vyber alespoň jeden stream.", "error");
-        return;
+    function getCatalogFilter() {
+        var input = el("catalogFilter");
+        return input ? input.value.trim() : "";
     }
 
-    try {
-        const media = await fetchJson(`${API_URL}/media`, {
+    function getTypeFilter() {
+        var select = el("typeFilter");
+        return select ? select.value : "all";
+    }
+
+    function loadCatalog() {
+        var params = new URLSearchParams({ media_type: getTypeFilter() });
+        var q = getCatalogFilter();
+        if (q) params.set("q", q);
+
+        return requestJson(API_URL + "/catalog?" + params.toString())
+            .then(function (data) {
+                catalogItems = data.data || [];
+                renderCatalog();
+                if (!selectedMediaId && catalogItems.length) {
+                    return showDetail(catalogItems[0]._id);
+                }
+            })
+            .catch(function (error) {
+                console.error(error);
+                showStatus("Nepodařilo se načíst katalog.", "error");
+            });
+    }
+
+    function renderCatalog() {
+        var container = el("catalogList");
+        if (!container) return;
+
+        if (!catalogItems.length) {
+            container.innerHTML = '<div class="empty-list">Katalog je prázdný.</div>';
+            return;
+        }
+
+        container.innerHTML = catalogItems.map(function (item) {
+            var active = item._id === selectedMediaId ? "active" : "";
+            var poster = item.poster || "";
+            var typeLabel = item.type === "tvshow" ? "Seriál" : "Film";
+            return '' +
+                '<button class="catalog-item ' + active + '" data-action="detail" data-id="' + escapeHtml(item._id) + '">' +
+                    '<div class="thumb">' + (poster ? '<img src="' + escapeHtml(poster) + '" alt="">' : "") + '</div>' +
+                    '<div>' +
+                        '<strong>' + escapeHtml(item.title) + '</strong>' +
+                        '<span>' + typeLabel + ' · ' + (item.year || "-") + ' · ' + (item.stream_count || 0) + ' streamů</span>' +
+                    '</div>' +
+                '</button>';
+        }).join("");
+    }
+
+    function searchMedia() {
+        var input = el("searchInput");
+        var panel = el("searchPanel");
+        var query = input ? input.value.trim() : "";
+        if (!query) {
+            showStatus("Zadej název filmu nebo seriálu.", "error");
+            return;
+        }
+
+        setSearching(true);
+        showStatus("Vyhledávám streamy a metadata...", "info");
+        if (panel) {
+            panel.classList.add("hidden");
+            panel.innerHTML = "";
+        }
+
+        requestJson(API_URL + "/search?q=" + encodeURIComponent(query))
+            .then(function (data) {
+                currentSearch = data;
+                renderSearchResults();
+                showStatus("", "info");
+            })
+            .catch(function (error) {
+                console.error(error);
+                showStatus("Vyhledávání selhalo. Zkontroluj log add-onu.", "error");
+            })
+            .finally(function () {
+                setSearching(false);
+            });
+    }
+
+    function renderSearchResults() {
+        var panel = el("searchPanel");
+        if (!panel) return;
+
+        var metadata = currentSearch ? currentSearch.metadata : null;
+        var streams = currentSearch ? (currentSearch.streams || []) : [];
+        if (!metadata) {
+            panel.innerHTML = "";
+            panel.classList.add("hidden");
+            return;
+        }
+
+        var poster = metadata.poster || "";
+        panel.innerHTML = '' +
+            '<div class="search-header">' +
+                '<div class="poster-small">' + (poster ? '<img src="' + escapeHtml(poster) + '" alt="">' : "") + '</div>' +
+                '<div>' +
+                    '<h2>' + escapeHtml(metadata.title) + '</h2>' +
+                    '<p>' + (metadata.year || "-") + ' · ' + (metadata.type === "tvshow" ? "Seriál" : "Film") + ' · ' + (metadata.rating || 0) + '% · ' + String(metadata.source || "").toUpperCase() + '</p>' +
+                    '<p>' + escapeHtml(metadata.plot || "Bez popisu.") + '</p>' +
+                '</div>' +
+            '</div>' +
+            '<div class="stream-actions">' +
+                '<label><input type="checkbox" id="selectAllStreams"> Vybrat vše</label>' +
+                '<button type="button" data-action="save-selected">Zařadit vybrané do sbírky</button>' +
+            '</div>' +
+            '<div class="stream-table">' + renderSearchStreamRows(streams) + '</div>';
+
+        panel.classList.remove("hidden");
+    }
+
+    function renderSearchStreamRows(streams) {
+        if (!streams.length) {
+            return '<div class="empty-list">Nebyly nalezeny žádné streamy.</div>';
+        }
+
+        return streams.map(function (stream, index) {
+            var season = stream.season && stream.episode ? '<span>S' + stream.season + ' E' + stream.episode + '</span>' : "";
+            return '' +
+                '<label class="stream-row selectable">' +
+                    '<input type="checkbox" class="search-stream-check" data-index="' + index + '">' +
+                    '<div>' +
+                        '<strong>' + escapeHtml(stream.filename) + '</strong>' +
+                        '<span>' + escapeHtml(stream.provider) + ' · ' + escapeHtml(stream.format || "-") + ' · ' + formatBytes(stream.size) + ' · ' + (stream.width || "-") + 'x' + (stream.height || "-") + '</span>' +
+                        season +
+                    '</div>' +
+                '</label>';
+        }).join("");
+    }
+
+    function toggleSearchStreams(checked) {
+        var checks = document.querySelectorAll(".search-stream-check");
+        for (var i = 0; i < checks.length; i += 1) {
+            checks[i].checked = checked;
+        }
+    }
+
+    function saveSelectedStreams() {
+        var checks = document.querySelectorAll(".search-stream-check:checked");
+        var streams = [];
+        for (var i = 0; i < checks.length; i += 1) {
+            streams.push(currentSearch.streams[Number(checks[i].getAttribute("data-index"))]);
+        }
+
+        if (!streams.length) {
+            showStatus("Vyber alespoň jeden stream.", "error");
+            return;
+        }
+
+        showStatus("Ukládám vybrané streamy...", "info");
+        requestJson(API_URL + "/media", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ metadata: currentSearch.metadata, streams }),
+            body: JSON.stringify({ metadata: currentSearch.metadata, streams: streams }),
+        })
+            .then(function (media) {
+                selectedMediaId = media._id;
+                el("searchPanel").classList.add("hidden");
+                showStatus("Vybrané streamy byly zařazeny do sbírky.", "success");
+                return loadCatalog().then(function () {
+                    return showDetail(media._id);
+                });
+            })
+            .catch(function (error) {
+                console.error(error);
+                showStatus("Uložení vybraných streamů selhalo.", "error");
+            });
+    }
+
+    function showDetail(mediaId) {
+        selectedMediaId = mediaId;
+        renderCatalog();
+        return requestJson(API_URL + "/media/" + encodeURIComponent(mediaId))
+            .then(function (item) {
+                renderDetail(item);
+            })
+            .catch(function (error) {
+                console.error(error);
+                showStatus("Detail se nepodařilo načíst.", "error");
+            });
+    }
+
+    function renderDetail(item) {
+        var poster = item.poster || "";
+        var genres = (item.genres || []).join(", ");
+        var panel = el("detailPanel");
+        if (!panel) return;
+
+        panel.innerHTML = '' +
+            '<div class="detail-head">' +
+                '<div class="poster">' + (poster ? '<img src="' + escapeHtml(poster) + '" alt="">' : "") + '</div>' +
+                '<div class="detail-meta">' +
+                    '<div class="detail-title-row">' +
+                        '<div>' +
+                            '<h2>' + escapeHtml(item.title) + '</h2>' +
+                            '<p>' + (item.year || "-") + ' · ' + (item.type === "tvshow" ? "Seriál" : "Film") + ' · ' + escapeHtml(genres) + '</p>' +
+                        '</div>' +
+                        '<strong class="rating">' + (item.rating || 0) + '%</strong>' +
+                    '</div>' +
+                    '<p class="plot">' + escapeHtml(item.plot || "Bez popisu.") + '</p>' +
+                    '<div class="detail-actions">' +
+                        '<button type="button" data-action="check-media" data-id="' + escapeHtml(item._id) + '">Kontrola</button>' +
+                        '<button type="button" class="danger" data-action="delete-pending" data-id="' + escapeHtml(item._id) + '">Vyřadit označené</button>' +
+                    '</div>' +
+                '</div>' +
+            '</div>' +
+            (item.type === "tvshow" ? renderSeasons(item) : renderStreams(item.streams || []));
+    }
+
+    function renderSeasons(item) {
+        if (!item.seasons || !item.seasons.length) {
+            return '<h3>Streamy</h3>' + renderStreams(item.streams || []);
+        }
+
+        var looseStreams = (item.streams || []).filter(function (stream) {
+            return !stream.season || !stream.episode;
         });
-        selectedMediaId = media._id;
-        $("searchPanel").classList.add("hidden");
-        showStatus("Vybrané streamy byly zařazeny do sbírky.", "success");
-        await loadCatalog();
-        await showDetail(media._id);
-    } catch (error) {
-        console.error(error);
-        showStatus("Uložení vybraných streamů selhalo.", "error");
-    }
-}
-
-async function showDetail(mediaId) {
-    selectedMediaId = mediaId;
-    renderCatalog();
-    try {
-        const item = await fetchJson(`${API_URL}/media/${encodeURIComponent(mediaId)}`);
-        renderDetail(item);
-    } catch (error) {
-        console.error(error);
-        showStatus("Detail se nepodařilo načíst.", "error");
-    }
-}
-
-function renderDetail(item) {
-    const poster = item.poster || "";
-    const genres = (item.genres || []).join(", ");
-    $("detailPanel").innerHTML = `
-        <div class="detail-head">
-            <div class="poster">${poster ? `<img src="${escapeHtml(poster)}" alt="">` : ""}</div>
-            <div class="detail-meta">
-                <div class="detail-title-row">
-                    <div>
-                        <h2>${escapeHtml(item.title)}</h2>
-                        <p>${item.year || "-"} · ${item.type === "tvshow" ? "Seriál" : "Film"} · ${escapeHtml(genres)}</p>
-                    </div>
-                    <strong class="rating">${item.rating || 0}%</strong>
-                </div>
-                <p class="plot">${escapeHtml(item.plot || "Bez popisu.")}</p>
-                <div class="detail-actions">
-                    <button type="button" onclick="checkMediaStreams('${escapeHtml(item._id)}')">Kontrola</button>
-                    <button type="button" class="danger" onclick="deletePendingStreams('${escapeHtml(item._id)}')">Vyřadit označené</button>
-                </div>
-            </div>
-        </div>
-        ${item.type === "tvshow" ? renderSeasons(item) : renderStreams(item.streams || [])}
-    `;
-}
-
-function renderSeasons(item) {
-    if (!item.seasons?.length) {
-        return `
-            <h3>Streamy</h3>
-            ${renderStreams(item.streams || [])}
-        `;
+        var html = '<h3>Série a díly</h3><div class="seasons">';
+        html += item.seasons.map(function (season) {
+            return '<details open><summary>Série ' + season.season + '</summary>' +
+                season.episodes.map(function (episode) {
+                    return '<div class="episode-block"><h4>Díl ' + episode.episode + '</h4>' + renderStreams(episode.streams) + '</div>';
+                }).join("") +
+                '</details>';
+        }).join("");
+        html += '</div>';
+        if (looseStreams.length) {
+            html += '<h3>Nezařazené streamy</h3>' + renderStreams(looseStreams);
+        }
+        return html;
     }
 
-    const looseStreams = (item.streams || []).filter((stream) => !stream.season || !stream.episode);
-    return `
-        <h3>Série a díly</h3>
-        <div class="seasons">
-            ${item.seasons.map((season) => `
-                <details open>
-                    <summary>Série ${season.season}</summary>
-                    ${season.episodes.map((episode) => `
-                        <div class="episode-block">
-                            <h4>Díl ${episode.episode}</h4>
-                            ${renderStreams(episode.streams)}
-                        </div>
-                    `).join("")}
-                </details>
-            `).join("")}
-        </div>
-        ${looseStreams.length ? `<h3>Nezařazené streamy</h3>${renderStreams(looseStreams)}` : ""}
-    `;
-}
+    function renderStreams(streams) {
+        if (!streams.length) {
+            return '<div class="empty-list">Žádné streamy.</div>';
+        }
 
-function renderStreams(streams) {
-    if (!streams.length) {
-        return `<div class="empty-list">Žádné streamy.</div>`;
+        return '<div class="stream-table">' + streams.map(function (stream) {
+            var pending = stream.status === "pending_delete";
+            return '' +
+                '<div class="stream-row ' + (pending ? "pending" : "") + '">' +
+                    '<div>' +
+                        '<strong>' + escapeHtml(stream.filename) + '</strong>' +
+                        '<span>' + escapeHtml(stream.provider) + ' · ' + escapeHtml(stream.format || "-") + ' · ' + formatBytes(stream.size) + ' · ' + (stream.width || "-") + 'x' + (stream.height || "-") + ' · ' + formatDuration(stream.duration) + '</span>' +
+                        '<span>Stav: ' + (pending ? "označeno k vyřazení" : "aktivní") + (stream.last_checked_at ? " · kontrola " + escapeHtml(stream.last_checked_at) : "") + '</span>' +
+                    '</div>' +
+                    '<div class="row-actions">' +
+                        '<button type="button" data-action="check-stream" data-id="' + stream.id + '">Kontrola</button>' +
+                        '<button type="button" class="danger" data-action="delete-stream" data-id="' + stream.id + '">Vyřadit</button>' +
+                    '</div>' +
+                '</div>';
+        }).join("") + '</div>';
     }
 
-    return `
-        <div class="stream-table">
-            ${streams.map((stream) => `
-                <div class="stream-row ${stream.status === "pending_delete" ? "pending" : ""}">
-                    <div>
-                        <strong>${escapeHtml(stream.filename)}</strong>
-                        <span>${escapeHtml(stream.provider)} · ${escapeHtml(stream.format || "-")} · ${formatBytes(stream.size)} · ${stream.width || "-"}x${stream.height || "-"} · ${formatDuration(stream.duration)}</span>
-                        <span>Stav: ${stream.status === "pending_delete" ? "označeno k vyřazení" : "aktivní"}${stream.last_checked_at ? ` · kontrola ${escapeHtml(stream.last_checked_at)}` : ""}</span>
-                    </div>
-                    <div class="row-actions">
-                        <button type="button" onclick="checkStream(${stream.id})">Kontrola</button>
-                        <button type="button" class="danger" onclick="deleteStream(${stream.id})">Vyřadit</button>
-                    </div>
-                </div>
-            `).join("")}
-        </div>
-    `;
-}
-
-async function checkMediaStreams(mediaId) {
-    showStatus("Kontroluji streamy...", "info");
-    try {
-        await fetchJson(`${API_URL}/media/${encodeURIComponent(mediaId)}/check_streams`, { method: "POST" });
-        showStatus("Kontrola dokončena. Chybné streamy jsou označené k vyřazení.", "success");
-        await showDetail(mediaId);
-    } catch (error) {
-        console.error(error);
-        showStatus("Kontrola streamů selhala.", "error");
+    function checkMediaStreams(mediaId) {
+        showStatus("Kontroluji streamy...", "info");
+        requestJson(API_URL + "/media/" + encodeURIComponent(mediaId) + "/check_streams", { method: "POST" })
+            .then(function () {
+                showStatus("Kontrola dokončena. Chybné streamy jsou označené k vyřazení.", "success");
+                return showDetail(mediaId);
+            })
+            .catch(function (error) {
+                console.error(error);
+                showStatus("Kontrola streamů selhala.", "error");
+            });
     }
-}
 
-async function checkStream(streamId) {
-    try {
-        await fetchJson(`${API_URL}/streams/${streamId}/check`, { method: "POST" });
-        showStatus("Stream byl zkontrolován.", "success");
-        await showDetail(selectedMediaId);
-    } catch (error) {
-        console.error(error);
-        showStatus("Kontrola streamu selhala.", "error");
+    function checkStream(streamId) {
+        requestJson(API_URL + "/streams/" + streamId + "/check", { method: "POST" })
+            .then(function () {
+                showStatus("Stream byl zkontrolován.", "success");
+                return showDetail(selectedMediaId);
+            })
+            .catch(function (error) {
+                console.error(error);
+                showStatus("Kontrola streamu selhala.", "error");
+            });
     }
-}
 
-async function deleteStream(streamId) {
-    if (!confirm("Opravdu vyřadit tento stream?")) return;
-    try {
-        await fetchJson(`${API_URL}/streams/${streamId}`, { method: "DELETE" });
-        showStatus("Stream byl vyřazen.", "success");
-        await loadCatalog();
-        await showDetail(selectedMediaId);
-    } catch (error) {
-        console.error(error);
-        showStatus("Vyřazení streamu selhalo.", "error");
+    function deleteStream(streamId) {
+        if (!confirm("Opravdu vyřadit tento stream?")) return;
+        requestJson(API_URL + "/streams/" + streamId, { method: "DELETE" })
+            .then(function () {
+                showStatus("Stream byl vyřazen.", "success");
+                return loadCatalog().then(function () {
+                    return showDetail(selectedMediaId);
+                });
+            })
+            .catch(function (error) {
+                console.error(error);
+                showStatus("Vyřazení streamu selhalo.", "error");
+            });
     }
-}
 
-async function deletePendingStreams(mediaId) {
-    if (!confirm("Vyřadit všechny streamy označené ke smazání?")) return;
-    try {
-        const result = await fetchJson(`${API_URL}/media/${encodeURIComponent(mediaId)}/pending_streams`, { method: "DELETE" });
-        showStatus(`Vyřazeno streamů: ${result.deleted || 0}.`, "success");
-        await loadCatalog();
-        await showDetail(mediaId);
-    } catch (error) {
-        console.error(error);
-        showStatus("Vyřazení označených streamů selhalo.", "error");
+    function deletePendingStreams(mediaId) {
+        if (!confirm("Vyřadit všechny streamy označené ke smazání?")) return;
+        requestJson(API_URL + "/media/" + encodeURIComponent(mediaId) + "/pending_streams", { method: "DELETE" })
+            .then(function (result) {
+                showStatus("Vyřazeno streamů: " + (result.deleted || 0) + ".", "success");
+                return loadCatalog().then(function () {
+                    return showDetail(mediaId);
+                });
+            })
+            .catch(function (error) {
+                console.error(error);
+                showStatus("Vyřazení označených streamů selhalo.", "error");
+            });
     }
-}
 
-$("searchInput").addEventListener("keydown", (event) => {
-    if (event.key === "Enter") searchMedia();
-});
+    function handleClick(event) {
+        var target = event.target.closest("[data-action]");
+        if (!target) return;
+        var action = target.getAttribute("data-action");
+        var id = target.getAttribute("data-id");
 
-loadCatalog();
+        if (action === "detail") showDetail(id);
+        if (action === "save-selected") saveSelectedStreams();
+        if (action === "check-media") checkMediaStreams(id);
+        if (action === "delete-pending") deletePendingStreams(id);
+        if (action === "check-stream") checkStream(id);
+        if (action === "delete-stream") deleteStream(id);
+    }
+
+    function init() {
+        var searchButton = el("searchButton");
+        var searchInput = el("searchInput");
+        var typeFilter = el("typeFilter");
+        var catalogFilter = el("catalogFilter");
+
+        if (searchButton) searchButton.addEventListener("click", searchMedia);
+        if (searchInput) {
+            searchInput.addEventListener("keydown", function (event) {
+                if (event.key === "Enter") searchMedia();
+            });
+        }
+        if (typeFilter) typeFilter.addEventListener("change", loadCatalog);
+        if (catalogFilter) catalogFilter.addEventListener("input", loadCatalog);
+
+        document.addEventListener("click", handleClick);
+        document.addEventListener("change", function (event) {
+            if (event.target && event.target.id === "selectAllStreams") {
+                toggleSearchStreams(event.target.checked);
+            }
+        });
+
+        loadCatalog();
+    }
+
+    if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", init);
+    } else {
+        init();
+    }
+}());

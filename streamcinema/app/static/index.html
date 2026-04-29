@@ -15,7 +15,7 @@
             </div>
             <div class="search-box">
                 <input type="text" id="searchInput" placeholder="Hledat film nebo seriál">
-                <button type="button" onclick="searchMedia()">Hledat</button>
+                <button type="button" id="searchButton">Hledat</button>
             </div>
         </header>
 
@@ -26,13 +26,13 @@
             <aside class="catalog">
                 <div class="catalog-toolbar">
                     <h2>Katalog</h2>
-                    <select id="typeFilter" onchange="loadCatalog()">
+                    <select id="typeFilter">
                         <option value="all">Vše</option>
                         <option value="movie">Filmy</option>
                         <option value="tvshow">Seriály</option>
                     </select>
                 </div>
-                <input class="catalog-filter" id="catalogFilter" placeholder="Filtrovat katalog" oninput="loadCatalog()">
+                <input class="catalog-filter" id="catalogFilter" placeholder="Filtrovat katalog">
                 <div id="catalogList" class="catalog-list"></div>
             </aside>
 

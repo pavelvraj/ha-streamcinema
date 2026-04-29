@@ -2,6 +2,13 @@
 
 Všechny důležité změny add-onu StreamCinema API jsou vedené v tomto souboru.
 
+## 0.2.1
+
+- Opraveno kliknutí na tlačítko `Hledat` v Home Assistant Ingress GUI.
+- Frontend už nepoužívá inline `onclick`/`onchange` handlery.
+- Frontend byl přepsán na kompatibilnější JavaScript bez `?.`, `??` a `replaceAll`.
+- Tlačítko hledání při běžícím dotazu ukazuje stav `Hledám...`.
+
 ## 0.2.0
 
 - Přidán katalog uložených filmů a seriálů.
