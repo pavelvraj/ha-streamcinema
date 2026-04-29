@@ -1,0 +1,28 @@
+# Changelog
+
+Všechny důležité změny add-onu StreamCinema API jsou vedené v tomto souboru.
+
+## 0.1.13
+
+- Přidán `CHANGELOG.md`, aby Home Assistant uměl zobrazit odkaz `Seznam změn`.
+- Vyčištěna struktura GitHub repozitáře: add-on je pouze ve složce `streamcinema/`.
+- Odstraněna stará root kopie add-on souborů, která mohla způsobovat zobrazení verze `0.1.10`.
+
+## 0.1.12
+
+- Přidán Home Assistant Ingress.
+- Přidána položka `Stream Cinema` do levého menu Home Assistantu.
+- Přidány volby `panel_title`, `panel_icon` a `panel_admin`.
+- Upraveny frontend cesty na relativní, aby GUI fungovalo i pod Ingress URL.
+
+## 0.1.11
+
+- Opraven start aplikace z `main:app` na `app.main:app`.
+- Dockerfile instaluje závislosti z `requirements.txt`.
+- Opravena inicializace SQLite databáze a vytváření datové složky.
+- Opravena serializace médií a streamů pro API.
+- Doplněn funkční endpoint pro populární položky.
+
+## 0.1.10
+
+- Původní vývojová verze add-onu.

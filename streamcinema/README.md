@@ -326,6 +326,38 @@ Zkontroluj:
 - URL v HA míří na root GitHub repozitáře.
 - Architektura v `config.yaml` odpovídá zařízení.
 
+### Home Assistant pořád ukazuje starou verzi
+
+Nejprve zkontroluj, že na GitHubu existuje jen jedna konfigurace add-onu:
+
+```text
+streamcinema/config.yaml
+```
+
+Root soubor `config.yaml` v repozitáři být nemá. Home Assistant totiž podle dokumentace hledá `config.yaml` rekurzivně v celém add-on repozitáři, takže stará root konfigurace může způsobit zobrazení staré verze.
+
+Postup v Home Assistantu:
+
+1. Otevři `Settings -> Add-ons -> Add-on Store`.
+2. Klikni na tři tečky vpravo nahoře.
+3. Dej `Check for updates`.
+4. Pokud pořád vidíš starou verzi, odeber repozitář z `Repositories`.
+5. Restartuj Supervisor nebo spusť přes SSH:
+
+```text
+ha supervisor reload
+```
+
+6. Přidej repozitář znovu:
+
+```text
+https://github.com/pavelvraj/ha-streamcinema
+```
+
+7. Znovu otevři add-on store a nainstaluj nebo aktualizuj add-on.
+
+Pokud je add-on už nainstalovaný a stále drží starý image, proveď `Uninstall` a následně `Install`. Konfigurace v `/config/streamcinema/data/db.sqlite` zůstává mimo image add-onu.
+
 ### Add-on nejde spustit
 
 Otevři log add-onu a hledej chyby při startu. Správný startovací příkaz je:
