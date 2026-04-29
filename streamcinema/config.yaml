@@ -1,0 +1,22 @@
+name: "StreamCinema API"
+version: "0.1.10"
+slug: "streamcinema"
+description: "Vlastni StreamCinema backend s Webshare a Fastshare"
+arch:
+  - aarch64
+startup: application
+boot: auto
+ports:
+  8765/tcp: 8765
+map:
+  - config:rw
+options:
+  webshare_username: ""
+  webshare_password: ""
+  fastshare_username: ""
+  fastshare_password: ""
+schema:
+  webshare_username: str
+  webshare_password: password
+  fastshare_username: str
+  fastshare_password: password

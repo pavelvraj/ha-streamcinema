@@ -1,0 +1,7 @@
+.codex_tmp/
+.codex_deps/
+*.sqlite
+*.sqlite3
+__pycache__/
+*.pyc
+.venv/
