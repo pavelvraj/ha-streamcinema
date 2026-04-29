@@ -2,6 +2,12 @@
 
 Všechny důležité změny add-onu StreamCinema API jsou vedené v tomto souboru.
 
+## 0.1.16
+
+- Opraven Webshare login: odstraněn neplatný parametr `rounds` u `md5_crypt` a doplněn Webshare `digest`.
+- Fastshare hledání nyní zkouší více API parametrů a při selhání používá webový fallback.
+- Zlepšeno logování chyb providerů.
+
 ## 0.1.15
 
 - Opraveno otevření webového GUI přes Home Assistant Ingress, který posílal požadavek na cestu `//`.

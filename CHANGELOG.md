@@ -2,6 +2,12 @@
 
 This file is intentionally duplicated at the repository root for Home Assistant compatibility. The add-on changelog source is `streamcinema/CHANGELOG.md`.
 
+## 0.1.16
+
+- Fixed Webshare login by removing the invalid `rounds` argument from `md5_crypt` and adding the Webshare `digest` field.
+- Fastshare search now tries multiple API parameter variants and falls back to web search parsing.
+- Improved provider error logging.
+
 ## 0.1.15
 
 - Fixed opening the web GUI through Home Assistant Ingress when Supervisor requested `//`.
