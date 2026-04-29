@@ -2,6 +2,11 @@
 
 Všechny důležité změny add-onu StreamCinema API jsou vedené v tomto souboru.
 
+## 0.1.14
+
+- Přidána kopie changelogu také do rootu repozitáře pro kompatibilitu s Home Assistant zobrazením `Seznam změn`.
+- Zvýšena verze add-onu, aby Supervisor načetl nová metadata repozitáře.
+
 ## 0.1.13
 
 - Přidán `CHANGELOG.md`, aby Home Assistant uměl zobrazit odkaz `Seznam změn`.
