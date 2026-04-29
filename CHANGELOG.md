@@ -2,6 +2,12 @@
 
 This file is intentionally duplicated at the repository root for Home Assistant compatibility. The add-on changelog source is `streamcinema/CHANGELOG.md`.
 
+## 0.2.3
+
+- `/api/search` now returns an HTML search result page for normal form submissions instead of raw JSON.
+- JavaScript JSON search moved to `/api/search_json`.
+- The fallback result page can select streams and save them to the collection even if the main Ingress JavaScript does not run.
+
 ## 0.2.2
 
 - Added an HTML form fallback for search, so even without JavaScript the `Hledat` button calls `/api/search`.

@@ -6,7 +6,7 @@ from datetime import datetime
 from pathlib import Path
 
 from fastapi import Body, FastAPI, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.database import get_db_connection, init_db
@@ -422,6 +422,135 @@ def search_and_save(query):
         conn.close()
 
 
+def html_escape(value):
+    return (
+        str(value or "")
+        .replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+        .replace("'", "&#039;")
+    )
+
+
+def format_size(size):
+    size = float(size or 0)
+    if not size:
+        return "-"
+    units = ["B", "KB", "MB", "GB", "TB"]
+    index = 0
+    while size >= 1024 and index < len(units) - 1:
+        size /= 1024
+        index += 1
+    return f"{size:.1f} {units[index]}" if index else f"{int(size)} {units[index]}"
+
+
+def render_search_page(result):
+    metadata = result["metadata"]
+    streams = result["streams"]
+    metadata_json = html_escape(json.dumps(metadata, ensure_ascii=False))
+    stream_rows = []
+
+    for index, stream in enumerate(streams):
+        stream_json = html_escape(json.dumps(stream, ensure_ascii=False))
+        stream_rows.append(
+            f"""
+            <label class="stream-row selectable">
+                <input type="checkbox" name="stream" value="{index}">
+                <input type="hidden" id="stream-{index}" value="{stream_json}">
+                <div>
+                    <strong>{html_escape(stream.get("filename"))}</strong>
+                    <span>{html_escape(stream.get("provider"))} · {html_escape(stream.get("format") or "-")} · {format_size(stream.get("size"))} · {stream.get("width") or "-"}x{stream.get("height") or "-"}</span>
+                </div>
+            </label>
+            """
+        )
+
+    rows_html = "\n".join(stream_rows) or '<div class="empty-list">Nebyly nalezeny žádné streamy.</div>'
+    poster = metadata.get("poster") or ""
+    poster_html = f'<img src="{html_escape(poster)}" alt="">' if poster else ""
+    return f"""
+    <!DOCTYPE html>
+    <html lang="cs">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Stream Cinema - výsledky</title>
+        <link rel="stylesheet" href="../static/style.css?v=0.2.3">
+    </head>
+    <body>
+        <div class="app-shell">
+            <header class="topbar">
+                <div>
+                    <h1>Stream Cinema</h1>
+                    <p>Výsledky hledání</p>
+                </div>
+                <form class="search-box" action="search" method="get">
+                    <input type="text" name="q" value="{html_escape(metadata.get("title"))}" placeholder="Hledat film nebo seriál">
+                    <button type="submit">Hledat</button>
+                </form>
+            </header>
+            <section class="search-panel">
+                <div class="search-header">
+                    <div class="poster-small">{poster_html}</div>
+                    <div>
+                        <h2>{html_escape(metadata.get("title"))}</h2>
+                        <p>{metadata.get("year") or "-"} · {"Seriál" if metadata.get("type") == "tvshow" else "Film"} · {metadata.get("rating") or 0}% · {html_escape(str(metadata.get("source") or "").upper())}</p>
+                        <p>{html_escape(metadata.get("plot") or "Bez popisu.")}</p>
+                    </div>
+                </div>
+                <div id="status" class="status hidden"></div>
+                <div class="stream-actions">
+                    <label><input type="checkbox" id="selectAllStreams"> Vybrat vše</label>
+                    <button type="button" id="saveButton">Zařadit vybrané do sbírky</button>
+                    <a class="button-link" href="../">Zpět do katalogu</a>
+                </div>
+                <input type="hidden" id="metadataJson" value="{metadata_json}">
+                <div class="stream-table">{rows_html}</div>
+            </section>
+        </div>
+        <script>
+        (function () {{
+            function status(message, type) {{
+                var node = document.getElementById("status");
+                node.textContent = message || "";
+                node.className = message ? "status " + (type || "info") : "status hidden";
+            }}
+            document.getElementById("selectAllStreams").addEventListener("change", function () {{
+                var checks = document.querySelectorAll("input[name='stream']");
+                for (var i = 0; i < checks.length; i += 1) checks[i].checked = this.checked;
+            }});
+            document.getElementById("saveButton").addEventListener("click", function () {{
+                var checks = document.querySelectorAll("input[name='stream']:checked");
+                var streams = [];
+                for (var i = 0; i < checks.length; i += 1) {{
+                    streams.push(JSON.parse(document.getElementById("stream-" + checks[i].value).value));
+                }}
+                if (!streams.length) {{
+                    status("Vyber alespoň jeden stream.", "error");
+                    return;
+                }}
+                status("Ukládám vybrané streamy...", "info");
+                fetch("../media", {{
+                    method: "POST",
+                    headers: {{ "Content-Type": "application/json" }},
+                    body: JSON.stringify({{ metadata: JSON.parse(document.getElementById("metadataJson").value), streams: streams }})
+                }}).then(function (response) {{
+                    if (!response.ok) throw new Error("HTTP " + response.status);
+                    return response.json();
+                }}).then(function () {{
+                    status("Vybrané streamy byly zařazeny do sbírky.", "success");
+                }}).catch(function () {{
+                    status("Uložení selhalo. Zkontroluj log add-onu.", "error");
+                }});
+            }});
+        }}());
+        </script>
+    </body>
+    </html>
+    """
+
+
 @app.get("/")
 async def read_index():
     return FileResponse(STATIC_DIR / "index.html")
@@ -470,8 +599,7 @@ def media_detail(media_id: str):
         conn.close()
 
 
-@app.get("/api/search")
-def search_preview(q: str):
+def run_search_preview(q: str):
     query = q.strip()
     if not query:
         return {"metadata": None, "streams": []}
@@ -480,6 +608,16 @@ def search_preview(q: str):
     streams = search_provider_streams(query)
     metadata["type"] = infer_media_type(streams, metadata)
     return {"metadata": metadata, "streams": streams, "totalCount": len(streams)}
+
+
+@app.get("/api/search_json")
+def search_preview_json(q: str):
+    return run_search_preview(q)
+
+
+@app.get("/api/search", response_class=HTMLResponse)
+def search_preview_page(q: str):
+    return HTMLResponse(render_search_page(run_search_preview(q)))
 
 
 @app.post("/api/media")

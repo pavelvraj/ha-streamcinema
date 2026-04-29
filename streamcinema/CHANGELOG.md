@@ -2,6 +2,12 @@
 
 Všechny důležité změny add-onu StreamCinema API jsou vedené v tomto souboru.
 
+## 0.2.3
+
+- `/api/search` nyní při formulářovém odeslání vrací HTML stránku s výsledky místo surového JSONu.
+- JSON vyhledávání pro JavaScript bylo přesunuto na `/api/search_json`.
+- Výsledková fallback stránka umožňuje vybrat streamy a uložit je do sbírky i v případě, že hlavní JavaScript v Ingressu neběží.
+
 ## 0.2.2
 
 - Přidán HTML formulářový fallback pro hledání, takže i bez JavaScriptu klik na `Hledat` zavolá `/api/search`.

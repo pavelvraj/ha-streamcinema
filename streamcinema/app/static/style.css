@@ -39,6 +39,17 @@ button {
     font-weight: 600;
 }
 
+.button-link {
+    display: inline-block;
+    border-radius: 6px;
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    color: var(--text);
+    padding: 9px 12px;
+    text-decoration: none;
+    font-weight: 600;
+}
+
 button:hover {
     filter: brightness(1.08);
 }

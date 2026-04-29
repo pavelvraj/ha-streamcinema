@@ -163,7 +163,7 @@
             panel.innerHTML = "";
         }
 
-        requestJson(API_URL + "/search?q=" + encodeURIComponent(query))
+        requestJson(API_URL + "/search_json?q=" + encodeURIComponent(query))
             .then(function (data) {
                 currentSearch = data;
                 renderSearchResults();
