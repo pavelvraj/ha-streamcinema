@@ -2,6 +2,14 @@
 
 Všechny důležité změny add-onu StreamCinema API jsou vedené v tomto souboru.
 
+## 0.2.2
+
+- Přidán HTML formulářový fallback pro hledání, takže i bez JavaScriptu klik na `Hledat` zavolá `/api/search`.
+- Přidán cache-busting pro `app.js` a `style.css`.
+- Přidán XHR fallback pro starší WebView bez `fetch`.
+- Odstraněn `Promise.finally` a `Element.closest` kvůli kompatibilitě.
+- Přidána viditelná indikace `GUI načteno.`, aby šlo poznat, že se JavaScript spustil.
+
 ## 0.2.1
 
 - Opraveno kliknutí na tlačítko `Hledat` v Home Assistant Ingress GUI.

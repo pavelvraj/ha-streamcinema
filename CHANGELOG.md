@@ -2,6 +2,14 @@
 
 This file is intentionally duplicated at the repository root for Home Assistant compatibility. The add-on changelog source is `streamcinema/CHANGELOG.md`.
 
+## 0.2.2
+
+- Added an HTML form fallback for search, so even without JavaScript the `Hledat` button calls `/api/search`.
+- Added cache busting for `app.js` and `style.css`.
+- Added an XHR fallback for older WebViews without `fetch`.
+- Removed `Promise.finally` and `Element.closest` for compatibility.
+- Added a visible `GUI načteno.` indicator so it is clear whether JavaScript started.
+
 ## 0.2.1
 
 - Fixed the `Hledat` button in the Home Assistant Ingress GUI.

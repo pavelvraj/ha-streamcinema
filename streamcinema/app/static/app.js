@@ -23,6 +23,9 @@
     }
 
     function requestJson(url, options) {
+        if (!window.fetch) {
+            return requestJsonXhr(url, options);
+        }
         return fetch(url, options || {}).then(function (response) {
             if (!response.ok) {
                 return response.text().then(function (text) {
@@ -30,6 +33,33 @@
                 });
             }
             return response.json();
+        });
+    }
+
+    function requestJsonXhr(url, options) {
+        options = options || {};
+        return new Promise(function (resolve, reject) {
+            var xhr = new XMLHttpRequest();
+            xhr.open(options.method || "GET", url, true);
+            var headers = options.headers || {};
+            Object.keys(headers).forEach(function (key) {
+                xhr.setRequestHeader(key, headers[key]);
+            });
+            xhr.onload = function () {
+                if (xhr.status < 200 || xhr.status >= 300) {
+                    reject(new Error(xhr.responseText || ("HTTP " + xhr.status)));
+                    return;
+                }
+                try {
+                    resolve(JSON.parse(xhr.responseText || "{}"));
+                } catch (error) {
+                    reject(error);
+                }
+            };
+            xhr.onerror = function () {
+                reject(new Error("Network error"));
+            };
+            xhr.send(options.body || null);
         });
     }
 
@@ -74,11 +104,11 @@
     }
 
     function loadCatalog() {
-        var params = new URLSearchParams({ media_type: getTypeFilter() });
         var q = getCatalogFilter();
-        if (q) params.set("q", q);
+        var query = "media_type=" + encodeURIComponent(getTypeFilter());
+        if (q) query += "&q=" + encodeURIComponent(q);
 
-        return requestJson(API_URL + "/catalog?" + params.toString())
+        return requestJson(API_URL + "/catalog?" + query)
             .then(function (data) {
                 catalogItems = data.data || [];
                 renderCatalog();
@@ -120,6 +150,7 @@
         var input = el("searchInput");
         var panel = el("searchPanel");
         var query = input ? input.value.trim() : "";
+        console.log("StreamCinema search click", query);
         if (!query) {
             showStatus("Zadej název filmu nebo seriálu.", "error");
             return;
@@ -137,12 +168,11 @@
                 currentSearch = data;
                 renderSearchResults();
                 showStatus("", "info");
+                setSearching(false);
             })
             .catch(function (error) {
                 console.error(error);
                 showStatus("Vyhledávání selhalo. Zkontroluj log add-onu.", "error");
-            })
-            .finally(function () {
                 setSearching(false);
             });
     }
@@ -377,7 +407,7 @@
     }
 
     function handleClick(event) {
-        var target = event.target.closest("[data-action]");
+        var target = closestAction(event.target);
         if (!target) return;
         var action = target.getAttribute("data-action");
         var id = target.getAttribute("data-id");
@@ -390,13 +420,33 @@
         if (action === "delete-stream") deleteStream(id);
     }
 
+    function closestAction(node) {
+        while (node && node !== document) {
+            if (node.getAttribute && node.getAttribute("data-action")) return node;
+            node = node.parentNode;
+        }
+        return null;
+    }
+
     function init() {
-        var searchButton = el("searchButton");
+        window.streamCinemaSearch = function (event) {
+            if (event && event.preventDefault) event.preventDefault();
+            searchMedia();
+            return false;
+        };
+
+        showStatus("GUI načteno.", "success");
+        var searchForm = el("searchForm");
         var searchInput = el("searchInput");
         var typeFilter = el("typeFilter");
         var catalogFilter = el("catalogFilter");
 
-        if (searchButton) searchButton.addEventListener("click", searchMedia);
+        if (searchForm) {
+            searchForm.addEventListener("submit", function (event) {
+                event.preventDefault();
+                searchMedia();
+            });
+        }
         if (searchInput) {
             searchInput.addEventListener("keydown", function (event) {
                 if (event.key === "Enter") searchMedia();

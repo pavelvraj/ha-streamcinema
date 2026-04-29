@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Stream Cinema</title>
-    <link rel="stylesheet" href="static/style.css">
+    <link rel="stylesheet" href="static/style.css?v=0.2.2">
 </head>
 <body>
     <div class="app-shell">
@@ -13,10 +13,10 @@
                 <h1>Stream Cinema</h1>
                 <p>Katalog filmů, seriálů a streamů</p>
             </div>
-            <div class="search-box">
-                <input type="text" id="searchInput" placeholder="Hledat film nebo seriál">
-                <button type="button" id="searchButton">Hledat</button>
-            </div>
+            <form class="search-box" id="searchForm" action="api/search" method="get">
+                <input type="text" id="searchInput" name="q" placeholder="Hledat film nebo seriál">
+                <button type="submit" id="searchButton" onclick="window.streamCinemaSearch && window.streamCinemaSearch(event)">Hledat</button>
+            </form>
         </header>
 
         <section id="status" class="status hidden"></section>
@@ -44,6 +44,6 @@
         </main>
     </div>
 
-    <script src="static/app.js"></script>
+    <script src="static/app.js?v=0.2.2"></script>
 </body>
 </html>
