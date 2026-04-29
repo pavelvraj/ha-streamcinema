@@ -1,4 +1,4 @@
-const API_URL = "/api";
+const API_URL = "api";
 
 function setLoading(isLoading) {
     document.getElementById("loading").classList.toggle("hidden", !isLoading);

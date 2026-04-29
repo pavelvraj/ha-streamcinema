@@ -4,6 +4,8 @@ Lokální backend pro vyhledávání filmů a seriálů na Webshare a Fastshare,
 
 Add-on poskytuje jednoduché webové GUI na `/` a API endpointy pod `/api/...`, které jsou zamýšlené jako lokální náhrada backendu pro KODI/Stream-Cinema workflow.
 
+Po instalaci se díky Home Assistant Ingress může zobrazit také položka `Stream Cinema` v levém menu Home Assistantu. Otevře stejné webové GUI přímo uvnitř rozhraní HA, podobně jako add-ony Studio Code Server nebo File editor.
+
 ## Co to dělá
 
 - Vyhledá soubory na Webshare a Fastshare.
@@ -251,6 +253,31 @@ Webové GUI:
 http://IP_ADRESA_HOME_ASSISTANTU:8765/
 ```
 
+Pokud používáš položku v levém menu Home Assistantu, otevři `Stream Cinema` přímo ze sidebaru. Tato cesta používá Home Assistant Ingress, takže není potřeba znát IP adresu ani port.
+
+### 7. Položka v levém menu Home Assistantu
+
+Add-on má zapnutý Ingress v `streamcinema/config.yaml`:
+
+```yaml
+ingress: true
+ingress_port: 8765
+ingress_entry: /
+panel_icon: mdi:movie-open-play
+panel_title: Stream Cinema
+panel_admin: false
+```
+
+Význam voleb:
+
+- `ingress: true` zapne otevření GUI uvnitř Home Assistantu.
+- `ingress_port: 8765` říká Supervisoru, na kterém portu běží FastAPI server v kontejneru.
+- `panel_title` nastavuje název položky v levém menu.
+- `panel_icon` nastavuje ikonu v levém menu.
+- `panel_admin: false` zpřístupní položku i neadministrátorským uživatelům. Pokud ji chceš jen pro adminy, změň hodnotu na `true`.
+
+Položku můžeš v Home Assistantu ručně skrýt nebo přesunout v nastavení sidebaru svého uživatele. Změna názvu nebo ikony vyžaduje úpravu `config.yaml`, zvýšení verze add-onu a aktualizaci/přeinstalaci add-onu.
+
 ## Lokální spuštění mimo Home Assistant
 
 Pro rychlý vývoj můžeš aplikaci spustit i mimo HA. Doporučené je nastavit vlastní cestu k databázi, aby se nepoužívalo `/config`.
@@ -360,4 +387,50 @@ Zkontroluj:
 - Docker entrypoint je `run.sh`.
 - Python závislosti jsou v `requirements.txt`.
 
-Po změně kódu v GitHub repozitáři je v Home Assistantu obvykle potřeba add-on znovu sestavit nebo přeinstalovat, aby Supervisor použil aktuální verzi.
+Po změně kódu v GitHub repozitáři zvyš verzi v `streamcinema/config.yaml`, například z `0.1.10` na `0.1.11`. Home Assistant Supervisor podle verze pozná, že má add-on znovu sestavit nebo stáhnout novou verzi. Pokud verze zůstane stejná, může běžet starý image i po aktualizaci souborů na GitHubu.
+
+## Automatické nahrávání změn na GitHub
+
+V rootu pracovní složky je připravený skript:
+
+```text
+scripts/sync-to-github.ps1
+```
+
+Skript zkopíruje aktuální add-on soubory do lokálního checkoutu repozitáře `https://github.com/pavelvraj/ha-streamcinema`, vytvoří commit a pushne změny do větve `main`.
+
+Ruční spuštění z PowerShellu:
+
+```powershell
+cd "C:\Users\pavel\OneDrive\Development\Codex\HA Stream Cinema"
+.\scripts\sync-to-github.ps1
+```
+
+Volitelně lze změnit commit message:
+
+```powershell
+.\scripts\sync-to-github.ps1 -CommitMessage "Update StreamCinema add-on"
+```
+
+Požadavky:
+
+- Musí být nainstalovaný Git for Windows.
+- Příkaz `git` musí být dostupný v PATH.
+- Git musí být přihlášený k GitHubu, například přes Git Credential Manager nebo GitHub Desktop.
+- Repozitář musí mít větev `main`. Pokud používáš jinou větev, spusť skript s `-Branch master` nebo uprav výchozí hodnotu.
+
+### Automatické spouštění ve Windows
+
+Pro automatické nahrávání můžeš skript spouštět přes Windows Task Scheduler.
+
+Příklad akce:
+
+```text
+Program:
+powershell.exe
+
+Arguments:
+-NoProfile -ExecutionPolicy Bypass -File "C:\Users\pavel\OneDrive\Development\Codex\HA Stream Cinema\scripts\sync-to-github.ps1"
+```
+
+Jako trigger nastav například opakování každých 15 minut. Skript commitne jen tehdy, když najde změny; pokud žádné změny nejsou, skončí bez commitu.

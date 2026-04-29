@@ -1,5 +1,5 @@
 name: "StreamCinema API"
-version: "0.1.10"
+version: "0.1.12"
 slug: "streamcinema"
 description: "Vlastni StreamCinema backend s Webshare a Fastshare"
 arch:
@@ -8,6 +8,12 @@ startup: application
 boot: auto
 ports:
   8765/tcp: 8765
+ingress: true
+ingress_port: 8765
+ingress_entry: /
+panel_icon: mdi:movie-open-play
+panel_title: Stream Cinema
+panel_admin: false
 map:
   - config:rw
 options:
