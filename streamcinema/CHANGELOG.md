@@ -2,6 +2,14 @@
 
 Všechny důležité změny add-onu StreamCinema API jsou vedené v tomto souboru.
 
+## 0.2.5
+
+- Opraveno Fastshare vyhledávání podle mobilního API tvaru `process=search&term=...&page=...`.
+- Přidáno stránkování Fastshare výsledků.
+- Parser Fastshare JSONu podporuje více variant názvů polí.
+- Fastshare link bez premium loginu vrací free URL `https://fastshare.cz/free/?lang=cs&u=IDENT`.
+- Přidáno ladicí logování nerozpoznané Fastshare API odpovědi.
+
 ## 0.2.4
 
 - Přidán výběr, zda hledat film nebo seriál.

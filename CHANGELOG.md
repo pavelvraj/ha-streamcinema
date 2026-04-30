@@ -2,6 +2,14 @@
 
 This file is intentionally duplicated at the repository root for Home Assistant compatibility. The add-on changelog source is `streamcinema/CHANGELOG.md`.
 
+## 0.2.5
+
+- Fixed Fastshare search to use the mobile API shape `process=search&term=...&page=...`.
+- Added Fastshare result pagination.
+- Fastshare JSON parsing now supports more response field variants.
+- Fastshare link fallback now returns `https://fastshare.cz/free/?lang=cs&u=IDENT` when premium link generation is unavailable.
+- Added debug logging for unrecognized Fastshare API responses.
+
 ## 0.2.4
 
 - Added a movie/TV show search selector.

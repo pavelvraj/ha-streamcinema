@@ -57,21 +57,28 @@ class FastshareScraper:
         return self._search_web(query)
 
     def _search_api(self, query):
-        variants = [
-            {"process": "search", "string": query, "type": "video"},
-            {"process": "search", "string": query, "type": "all"},
-            {"process": "search", "term": query, "type": "video"},
-            {"process": "search", "q": query, "type": "video"},
-        ]
-
+        results = []
+        seen = set()
         last_error = None
-        for params in variants:
+        for page in range(1, 6):
+            params = {"process": "search", "term": query, "page": page}
             try:
                 response = self.session.get(self.API_URL, params=params, timeout=10)
                 response.raise_for_status()
-                return self._parse_api_response(response.json())
+                page_results = self._parse_api_response(response.json())
+                if not page_results:
+                    break
+                for item in page_results:
+                    if item["ident"] in seen:
+                        continue
+                    results.append(item)
+                    seen.add(item["ident"])
             except Exception as exc:
                 last_error = exc
+                break
+
+        if results:
+            return results
 
         if last_error:
             print(f"FS API Search Error: {last_error}")
@@ -83,22 +90,48 @@ class FastshareScraper:
         elif isinstance(data, dict):
             items = (
                 data.get("files")
+                or data.get("file")
                 or data.get("data")
                 or data.get("items")
                 or data.get("results")
+                or data.get("list")
                 or []
             )
+            if isinstance(items, dict):
+                items = list(items.values())
         else:
             items = []
+
+        if not items:
+            preview = str(data)
+            print(f"FS API Search Debug: unrecognized response {preview[:500]}")
 
         results = []
         for item in items:
             if not isinstance(item, dict):
                 continue
 
-            ident = item.get("id") or item.get("file_id") or item.get("ident")
-            name = item.get("name") or item.get("filename") or item.get("title")
-            size = item.get("size_bytes") or item.get("size") or 0
+            ident = (
+                item.get("id")
+                or item.get("file_id")
+                or item.get("ident")
+                or item.get("u")
+            )
+            name = (
+                item.get("name")
+                or item.get("filename")
+                or item.get("file_name")
+                or item.get("title")
+                or item.get("n")
+            )
+            size = (
+                item.get("size_bytes")
+                or item.get("size")
+                or item.get("filesize")
+                or item.get("bytes")
+                or item.get("s")
+                or 0
+            )
             if not ident or not name:
                 continue
 
@@ -211,7 +244,7 @@ class FastshareScraper:
 
     def get_link(self, ident):
         if not self.logged_in and not self.login():
-            return None
+            return f"https://fastshare.cz/free/?lang=cs&u={ident}"
 
         try:
             response = self.session.get(
@@ -220,7 +253,8 @@ class FastshareScraper:
                 timeout=10,
             )
             response.raise_for_status()
-            return response.json().get("link")
+            data = response.json()
+            return data.get("link") or data.get("url") or data.get("download_url")
         except Exception as exc:
             print(f"FS Link Error: {exc}")
-            return None
+            return f"https://fastshare.cz/free/?lang=cs&u={ident}"
