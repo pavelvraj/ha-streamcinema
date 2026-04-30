@@ -2,6 +2,16 @@
 
 This file is intentionally duplicated at the repository root for Home Assistant compatibility. The add-on changelog source is `streamcinema/CHANGELOG.md`.
 
+## 0.2.4
+
+- Added a movie/TV show search selector.
+- TV show search tries the base title, `Epizoda`, and seasons `S01` through `S08`.
+- Episode parsing now recognizes `SxxEyy`, `1x02`, and `Epizoda 12`.
+- The fallback result page shows movies in a table and TV shows grouped by season and episode.
+- Stream providers are displayed as colored badges.
+- `Hledat další` appends additional streams to the current result overview.
+- IMDb fallback now uses the more available suggestion endpoint.
+
 ## 0.2.3
 
 - `/api/search` now returns an HTML search result page for normal form submissions instead of raw JSON.

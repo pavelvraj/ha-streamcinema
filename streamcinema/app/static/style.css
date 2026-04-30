@@ -334,6 +334,50 @@ summary {
     gap: 8px;
 }
 
+.stream-grid {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.stream-grid th,
+.stream-grid td {
+    border-bottom: 1px solid var(--line);
+    padding: 9px 10px;
+    text-align: left;
+    vertical-align: top;
+}
+
+.stream-grid th {
+    color: var(--muted);
+    font-size: 13px;
+    background: #15181c;
+}
+
+.stream-grid tr:last-child td {
+    border-bottom: 0;
+}
+
+.provider-badge {
+    display: inline-block;
+    border-radius: 999px;
+    padding: 3px 8px;
+    color: white;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.badge-ws {
+    background: #2f8f7b;
+}
+
+.badge-fs {
+    background: #3d6fb6;
+}
+
 .stream-row {
     display: grid;
     grid-template-columns: 1fr auto;

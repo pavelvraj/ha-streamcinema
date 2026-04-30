@@ -90,6 +90,11 @@ def parse_stream_info(filename):
     if match:
         season = int(match.group(1))
         episode = int(match.group(2))
+    else:
+        match = re.search(r"\b(?:epizoda|episode|ep\.?)\s*(\d{1,3})\b", lower, re.I)
+        if match:
+            season = 1
+            episode = int(match.group(1))
 
     extension = Path(name).suffix.lower().lstrip(".")
     if not extension:
@@ -126,13 +131,13 @@ def infer_media_type(streams, metadata):
     return "movie"
 
 
-def metadata_for_query(query):
+def metadata_for_query(query, media_type=None):
     csfd_data = CSFD.search_movie(query)
     if csfd_data:
         return {
             "source": "csfd",
             "id": f"csfd_{csfd_data['csfd_id']}",
-            "type": csfd_data.get("type") or "movie",
+            "type": media_type or csfd_data.get("type") or "movie",
             "title": csfd_data.get("title") or query,
             "original_title": csfd_data.get("original_title") or "",
             "year": csfd_data.get("year") or 0,
@@ -145,13 +150,13 @@ def metadata_for_query(query):
             "imdb_id": csfd_data.get("imdb_id"),
         }
 
-    imdb_data = IMDB.search_movie(query)
+    imdb_data = IMDB.search_movie(query, media_type=media_type)
     if imdb_data:
         imdb_id = imdb_data.get("imdb_id")
         return {
             "source": "imdb",
             "id": stable_imdb_id(imdb_id),
-            "type": imdb_data.get("type") or "movie",
+            "type": media_type or imdb_data.get("type") or "movie",
             "title": imdb_data.get("title") or query,
             "original_title": "",
             "year": imdb_data.get("year") or 0,
@@ -167,7 +172,7 @@ def metadata_for_query(query):
     return {
         "source": "manual",
         "id": stable_manual_id(query),
-        "type": "movie",
+        "type": media_type or "movie",
         "title": query,
         "original_title": "",
         "year": 0,
@@ -181,40 +186,64 @@ def metadata_for_query(query):
     }
 
 
-def search_provider_streams(query):
+def search_provider_streams(query, media_type="movie"):
+    queries = [query]
+    if media_type == "tvshow":
+        queries.extend(series_search_queries(query))
+
+    streams = []
+    seen = set()
+    for search_query in queries:
+        for item in search_provider_files(search_query):
+            provider = item.get("provider")
+            ident = item.get("ident")
+            if not provider or not ident or (provider, ident) in seen:
+                continue
+            seen.add((provider, ident))
+
+            filename = item.get("name") or item.get("filename") or ""
+            info = parse_stream_info(filename)
+            streams.append(
+                {
+                    "provider": provider,
+                    "ident": ident,
+                    "filename": filename,
+                    "size": int(item.get("size") or 0),
+                    "duration": item.get("duration"),
+                    "width": item.get("width") or info["width"],
+                    "height": item.get("height") or info["height"],
+                    "format": item.get("format") or info["format"],
+                    "season": item.get("season") or info["season"],
+                    "episode": item.get("episode") or info["episode"],
+                }
+            )
+
+    return sorted(
+        streams,
+        key=lambda item: (
+            item.get("season") or 999,
+            item.get("episode") or 999,
+            item.get("provider") or "",
+            item.get("filename") or "",
+        ),
+    )
+
+
+def series_search_queries(query):
+    extra = [f"{query} Epizoda"]
+    for season in range(1, 9):
+        extra.append(f"{query} S{season:02d}")
+    return extra
+
+
+def search_provider_files(query):
     all_files = []
     for scraper in (WS, FS):
         try:
             all_files.extend(scraper.search(query))
         except Exception as exc:
             print(f"{scraper.__class__.__name__} search failed: {exc}")
-
-    streams = []
-    seen = set()
-    for item in all_files:
-        provider = item.get("provider")
-        ident = item.get("ident")
-        if not provider or not ident or (provider, ident) in seen:
-            continue
-        seen.add((provider, ident))
-
-        filename = item.get("name") or item.get("filename") or ""
-        info = parse_stream_info(filename)
-        streams.append(
-            {
-                "provider": provider,
-                "ident": ident,
-                "filename": filename,
-                "size": int(item.get("size") or 0),
-                "duration": item.get("duration"),
-                "width": item.get("width") or info["width"],
-                "height": item.get("height") or info["height"],
-                "format": item.get("format") or info["format"],
-                "season": item.get("season") or info["season"],
-                "episode": item.get("episode") or info["episode"],
-            }
-        )
-    return streams
+    return all_files
 
 
 def upsert_media(conn, metadata, selected_streams):
@@ -411,7 +440,7 @@ def check_stream(stream):
 
 def search_and_save(query):
     metadata = metadata_for_query(query)
-    streams = search_provider_streams(query)
+    streams = search_provider_streams(query, metadata.get("type") or "movie")
     metadata["type"] = infer_media_type(streams, metadata)
     conn = get_db_connection()
     try:
@@ -445,28 +474,65 @@ def format_size(size):
     return f"{size:.1f} {units[index]}" if index else f"{int(size)} {units[index]}"
 
 
+def provider_badge(provider):
+    cls = "badge-ws" if provider == "webshare" else "badge-fs"
+    return f'<span class="provider-badge {cls}">{html_escape(provider)}</span>'
+
+
+def stream_table(streams):
+    if not streams:
+        return '<div class="empty-list">Nebyly nalezeny žádné streamy.</div>'
+
+    rows = []
+    for index, stream in enumerate(streams):
+        stream_json = html_escape(json.dumps(stream, ensure_ascii=False))
+        rows.append(
+            f"""
+            <tr>
+                <td><input type="checkbox" name="stream" value="{index}"><input type="hidden" id="stream-{index}" value="{stream_json}"></td>
+                <td>{provider_badge(stream.get("provider"))}</td>
+                <td><strong>{html_escape(stream.get("filename"))}</strong></td>
+                <td>{html_escape(stream.get("format") or "-")}</td>
+                <td>{format_size(stream.get("size"))}</td>
+                <td>{stream.get("width") or "-"}x{stream.get("height") or "-"}</td>
+            </tr>
+            """
+        )
+    return f"""
+    <table class="stream-grid">
+        <thead><tr><th></th><th>Zdroj</th><th>Název</th><th>Formát</th><th>Velikost</th><th>Rozlišení</th></tr></thead>
+        <tbody>{"".join(rows)}</tbody>
+    </table>
+    """
+
+
+def grouped_streams_html(streams):
+    grouped = group_episodes(streams)
+    if not grouped:
+        return stream_table(streams)
+
+    html = ['<div class="seasons">']
+    loose = [s for s in streams if s.get("season") is None or s.get("episode") is None]
+    for season in grouped:
+        html.append(f'<details open><summary>Série {season["season"]}</summary>')
+        for episode in season["episodes"]:
+            html.append(f'<div class="episode-block"><h4>Díl {episode["episode"]}</h4>')
+            html.append(stream_table(episode["streams"]))
+            html.append("</div>")
+        html.append("</details>")
+    if loose:
+        html.append("<h3>Nezařazené streamy</h3>")
+        html.append(stream_table(loose))
+    html.append("</div>")
+    return "".join(html)
+
+
 def render_search_page(result):
     metadata = result["metadata"]
     streams = result["streams"]
     metadata_json = html_escape(json.dumps(metadata, ensure_ascii=False))
-    stream_rows = []
-
-    for index, stream in enumerate(streams):
-        stream_json = html_escape(json.dumps(stream, ensure_ascii=False))
-        stream_rows.append(
-            f"""
-            <label class="stream-row selectable">
-                <input type="checkbox" name="stream" value="{index}">
-                <input type="hidden" id="stream-{index}" value="{stream_json}">
-                <div>
-                    <strong>{html_escape(stream.get("filename"))}</strong>
-                    <span>{html_escape(stream.get("provider"))} · {html_escape(stream.get("format") or "-")} · {format_size(stream.get("size"))} · {stream.get("width") or "-"}x{stream.get("height") or "-"}</span>
-                </div>
-            </label>
-            """
-        )
-
-    rows_html = "\n".join(stream_rows) or '<div class="empty-list">Nebyly nalezeny žádné streamy.</div>'
+    media_type = metadata.get("type") or "movie"
+    rows_html = grouped_streams_html(streams) if media_type == "tvshow" else stream_table(streams)
     poster = metadata.get("poster") or ""
     poster_html = f'<img src="{html_escape(poster)}" alt="">' if poster else ""
     return f"""
@@ -487,6 +553,10 @@ def render_search_page(result):
                 </div>
                 <form class="search-box" action="search" method="get">
                     <input type="text" name="q" value="{html_escape(metadata.get("title"))}" placeholder="Hledat film nebo seriál">
+                    <select name="media_type">
+                        <option value="movie" {"selected" if media_type == "movie" else ""}>Film</option>
+                        <option value="tvshow" {"selected" if media_type == "tvshow" else ""}>Seriál</option>
+                    </select>
                     <button type="submit">Hledat</button>
                 </form>
             </header>
@@ -503,18 +573,56 @@ def render_search_page(result):
                 <div class="stream-actions">
                     <label><input type="checkbox" id="selectAllStreams"> Vybrat vše</label>
                     <button type="button" id="saveButton">Zařadit vybrané do sbírky</button>
+                    <input type="text" id="moreQuery" placeholder="Hledat další streamy">
+                    <button type="button" id="moreButton">Hledat další</button>
                     <a class="button-link" href="../">Zpět do katalogu</a>
                 </div>
                 <input type="hidden" id="metadataJson" value="{metadata_json}">
                 <div class="stream-table">{rows_html}</div>
+                <h3>Doplněné streamy</h3>
+                <table class="stream-grid">
+                    <thead><tr><th></th><th>Zdroj</th><th>Název</th><th>Formát</th><th>Velikost</th><th>Rozlišení</th></tr></thead>
+                    <tbody id="extraRows"></tbody>
+                </table>
             </section>
         </div>
         <script>
         (function () {{
+            var nextIndex = {len(streams)};
             function status(message, type) {{
                 var node = document.getElementById("status");
                 node.textContent = message || "";
                 node.className = message ? "status " + (type || "info") : "status hidden";
+            }}
+            function esc(value) {{
+                return String(value || "").replace(/[&<>"']/g, function (ch) {{
+                    return {{ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }}[ch];
+                }});
+            }}
+            function size(bytes) {{
+                bytes = Number(bytes || 0);
+                if (!bytes) return "-";
+                var units = ["B", "KB", "MB", "GB", "TB"];
+                var index = 0;
+                while (bytes >= 1024 && index < units.length - 1) {{
+                    bytes = bytes / 1024;
+                    index += 1;
+                }}
+                return (index ? bytes.toFixed(1) : String(Math.round(bytes))) + " " + units[index];
+            }}
+            function appendStream(stream) {{
+                var row = document.createElement("tr");
+                var index = nextIndex++;
+                var providerClass = stream.provider === "webshare" ? "badge-ws" : "badge-fs";
+                row.innerHTML =
+                    '<td><input type="checkbox" name="stream" value="' + index + '"><input type="hidden" id="stream-' + index + '"></td>' +
+                    '<td><span class="provider-badge ' + providerClass + '">' + esc(stream.provider) + '</span></td>' +
+                    '<td><strong>' + esc(stream.filename) + '</strong></td>' +
+                    '<td>' + esc(stream.format || "-") + '</td>' +
+                    '<td>' + size(stream.size) + '</td>' +
+                    '<td>' + (stream.width || "-") + 'x' + (stream.height || "-") + '</td>';
+                document.getElementById("extraRows").appendChild(row);
+                document.getElementById("stream-" + index).value = JSON.stringify(stream);
             }}
             document.getElementById("selectAllStreams").addEventListener("change", function () {{
                 var checks = document.querySelectorAll("input[name='stream']");
@@ -543,6 +651,24 @@ def render_search_page(result):
                 }}).catch(function () {{
                     status("Uložení selhalo. Zkontroluj log add-onu.", "error");
                 }});
+            }});
+            document.getElementById("moreButton").addEventListener("click", function () {{
+                var value = document.getElementById("moreQuery").value;
+                if (!value) return;
+                status("Hledám další streamy...", "info");
+                fetch("search_json?q=" + encodeURIComponent(value) + "&media_type={media_type}")
+                    .then(function (response) {{
+                        if (!response.ok) throw new Error("HTTP " + response.status);
+                        return response.json();
+                    }})
+                    .then(function (data) {{
+                        var streams = data.streams || [];
+                        for (var i = 0; i < streams.length; i += 1) appendStream(streams[i]);
+                        status("Doplněno streamů: " + streams.length + ".", "success");
+                    }})
+                    .catch(function () {{
+                        status("Doplnění streamů selhalo.", "error");
+                    }});
             }});
         }}());
         </script>
@@ -599,25 +725,26 @@ def media_detail(media_id: str):
         conn.close()
 
 
-def run_search_preview(q: str):
+def run_search_preview(q: str, media_type: str = "movie"):
     query = q.strip()
     if not query:
         return {"metadata": None, "streams": []}
 
-    metadata = metadata_for_query(query)
-    streams = search_provider_streams(query)
-    metadata["type"] = infer_media_type(streams, metadata)
+    media_type = media_type if media_type in ("movie", "tvshow") else "movie"
+    metadata = metadata_for_query(query, media_type=media_type)
+    streams = search_provider_streams(query, media_type)
+    metadata["type"] = media_type
     return {"metadata": metadata, "streams": streams, "totalCount": len(streams)}
 
 
 @app.get("/api/search_json")
-def search_preview_json(q: str):
-    return run_search_preview(q)
+def search_preview_json(q: str, media_type: str = "movie"):
+    return run_search_preview(q, media_type)
 
 
 @app.get("/api/search", response_class=HTMLResponse)
-def search_preview_page(q: str):
-    return HTMLResponse(render_search_page(run_search_preview(q)))
+def search_preview_page(q: str, media_type: str = "movie"):
+    return HTMLResponse(render_search_page(run_search_preview(q, media_type)))
 
 
 @app.post("/api/media")

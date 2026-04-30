@@ -148,8 +148,10 @@
 
     function searchMedia() {
         var input = el("searchInput");
+        var type = el("searchType");
         var panel = el("searchPanel");
         var query = input ? input.value.trim() : "";
+        var mediaType = type ? type.value : "movie";
         console.log("StreamCinema search click", query);
         if (!query) {
             showStatus("Zadej název filmu nebo seriálu.", "error");
@@ -163,7 +165,7 @@
             panel.innerHTML = "";
         }
 
-        requestJson(API_URL + "/search_json?q=" + encodeURIComponent(query))
+        requestJson(API_URL + "/search_json?q=" + encodeURIComponent(query) + "&media_type=" + encodeURIComponent(mediaType))
             .then(function (data) {
                 currentSearch = data;
                 renderSearchResults();

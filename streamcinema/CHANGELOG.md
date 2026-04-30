@@ -2,6 +2,16 @@
 
 Všechny důležité změny add-onu StreamCinema API jsou vedené v tomto souboru.
 
+## 0.2.4
+
+- Přidán výběr, zda hledat film nebo seriál.
+- Seriálové hledání zkouší základní název, `Epizoda` a série `S01` až `S08`.
+- Parser dílů rozpozná `SxxEyy`, `1x02` i `Epizoda 12`.
+- Fallback výsledková stránka zobrazuje filmy v tabulce a seriály po sériích a dílech.
+- Zdroje streamů jsou označené barevnými štítky.
+- Tlačítko `Hledat další` doplňuje další nalezené streamy do aktuálního přehledu.
+- IMDb fallback nově používá dostupnější suggestion endpoint.
+
 ## 0.2.3
 
 - `/api/search` nyní při formulářovém odeslání vrací HTML stránku s výsledky místo surového JSONu.

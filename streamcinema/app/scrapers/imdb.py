@@ -1,5 +1,6 @@
 import json
 import re
+from urllib.parse import quote
 from urllib.parse import urljoin
 
 import requests
@@ -16,8 +17,15 @@ class IMDBScraper:
         ),
     }
 
-    def search_movie(self, query):
+    def search_movie(self, query, media_type=None):
         try:
+            suggestion = self._search_suggestion(query, media_type)
+            if suggestion:
+                details = self.get_movie_details(suggestion["imdb_id"])
+                if details:
+                    return details
+                return suggestion
+
             response = requests.get(
                 f"{self.BASE_URL}/find/",
                 params={"q": query, "s": "tt"},
@@ -39,6 +47,51 @@ class IMDBScraper:
         except Exception as exc:
             print(f"IMDB Search Error: {exc}")
             return None
+
+    def _search_suggestion(self, query, media_type=None):
+        clean = re.sub(r"\s+", "_", query.strip().lower())
+        if not clean:
+            return None
+
+        url = f"https://v3.sg.media-imdb.com/suggestion/{quote(clean[0])}/{quote(clean)}.json"
+        try:
+            response = requests.get(url, headers=self.HEADERS, timeout=10)
+            response.raise_for_status()
+            data = response.json()
+        except Exception as exc:
+            print(f"IMDB Suggestion Error: {exc}")
+            return None
+
+        wanted = "TV series" if media_type == "tvshow" else "feature"
+        fallback = None
+        for item in data.get("d", []):
+            imdb_id = item.get("id")
+            title = item.get("l")
+            if not imdb_id or not title or not imdb_id.startswith("tt"):
+                continue
+
+            item_type = item.get("q") or ""
+            candidate = {
+                "source": "imdb",
+                "imdb_id": imdb_id,
+                "csfd_id": None,
+                "title": title,
+                "year": item.get("y") or 0,
+                "rating": 0.0,
+                "poster": item.get("i", {}).get("imageUrl", "") if isinstance(item.get("i"), dict) else "",
+                "plot": item_type,
+                "genres": [],
+                "type": "tvshow" if "TV" in item_type else "movie",
+            }
+
+            if media_type and candidate["type"] == media_type:
+                return candidate
+            if not media_type and wanted in item_type:
+                return candidate
+            if fallback is None:
+                fallback = candidate
+
+        return fallback
 
     def get_movie_details(self, imdb_id):
         try:
