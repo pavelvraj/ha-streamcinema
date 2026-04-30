@@ -2,6 +2,13 @@
 
 This file is intentionally duplicated at the repository root for Home Assistant compatibility. The add-on changelog source is `streamcinema/CHANGELOG.md`.
 
+## 0.2.7
+
+- Fastshare scraper now tries both `fastshare.cloud` and `fastshare.cz`.
+- Fastshare API, login, and web fallback work with both domains.
+- Added `Hledání` and `Sbírka` tabs so search results and the collection stay separated.
+- After saving streams, the GUI switches to the saved item in the `Sbírka` tab.
+
 ## 0.2.6
 
 - Fixed saving selected streams from the fallback search results page.

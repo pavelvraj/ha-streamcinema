@@ -6,8 +6,14 @@ from bs4 import BeautifulSoup
 
 
 class FastshareScraper:
-    API_URL = "https://fastshare.cz/api/api_json2.php"
-    BASE_URL = "https://www.fastshare.cz"
+    API_URLS = [
+        "https://fastshare.cloud/api/api_json2.php",
+        "https://fastshare.cz/api/api_json2.php",
+    ]
+    BASE_URLS = [
+        "https://fastshare.cloud",
+        "https://www.fastshare.cz",
+    ]
     HEADERS = {
         "User-Agent": (
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -26,23 +32,24 @@ class FastshareScraper:
         if not self.username or not self.password:
             return False
 
-        try:
-            response = self.session.post(
-                "https://fastshare.cz/login",
-                data={
-                    "login_name": self.username,
-                    "login_password": self.password,
-                    "permanent": 1,
-                },
-                timeout=10,
-            )
-            response.raise_for_status()
-            text = response.text.lower()
-            if "logout" in text or "odhl" in text:
-                self.logged_in = True
-                return True
-        except Exception as exc:
-            print(f"FS Login Error: {exc}")
+        for base_url in self.BASE_URLS:
+            try:
+                response = self.session.post(
+                    f"{base_url}/login",
+                    data={
+                        "login_name": self.username,
+                        "login_password": self.password,
+                        "permanent": 1,
+                    },
+                    timeout=10,
+                )
+                response.raise_for_status()
+                text = response.text.lower()
+                if "logout" in text or "odhl" in text:
+                    self.logged_in = True
+                    return True
+            except Exception as exc:
+                print(f"FS Login Error ({base_url}): {exc}")
 
         return False
 
@@ -60,22 +67,25 @@ class FastshareScraper:
         results = []
         seen = set()
         last_error = None
-        for page in range(1, 6):
-            params = {"process": "search", "term": query, "page": page}
-            try:
-                response = self.session.get(self.API_URL, params=params, timeout=10)
-                response.raise_for_status()
-                page_results = self._parse_api_response(response.json())
-                if not page_results:
+        for api_url in self.API_URLS:
+            for page in range(1, 6):
+                params = {"process": "search", "term": query, "page": page}
+                try:
+                    response = self.session.get(api_url, params=params, timeout=10)
+                    response.raise_for_status()
+                    page_results = self._parse_api_response(response.json())
+                    if not page_results:
+                        break
+                    for item in page_results:
+                        if item["ident"] in seen:
+                            continue
+                        results.append(item)
+                        seen.add(item["ident"])
+                except Exception as exc:
+                    last_error = exc
                     break
-                for item in page_results:
-                    if item["ident"] in seen:
-                        continue
-                    results.append(item)
-                    seen.add(item["ident"])
-            except Exception as exc:
-                last_error = exc
-                break
+            if results:
+                return results
 
         if results:
             return results
@@ -147,10 +157,13 @@ class FastshareScraper:
         return results
 
     def _search_web(self, query):
-        urls = [
-            f"{self.BASE_URL}/{quote(query)}/s",
-            f"{self.BASE_URL}/fastshare/s",
-        ]
+        urls = []
+        for base_url in self.BASE_URLS:
+            urls.extend([
+                f"{base_url}/{quote(query)}/s",
+                f"{base_url}/video/s",
+                f"{base_url}/videa/s",
+            ])
         params_list = [
             {"type": "video"},
             {"term": query, "type": "video"},
@@ -176,9 +189,9 @@ class FastshareScraper:
 
         for link in soup.select("a[href]"):
             href = link.get("href") or ""
-            absolute_url = urljoin(self.BASE_URL, href)
+            absolute_url = urljoin(self.BASE_URLS[0], href)
             parsed = urlparse(absolute_url)
-            if "fastshare.cz" not in parsed.netloc:
+            if "fastshare.cz" not in parsed.netloc and "fastshare.cloud" not in parsed.netloc:
                 continue
 
             ident = self._ident_from_url(absolute_url)
@@ -244,11 +257,11 @@ class FastshareScraper:
 
     def get_link(self, ident):
         if not self.logged_in and not self.login():
-            return f"https://fastshare.cz/free/?lang=cs&u={ident}"
+            return f"https://fastshare.cloud/free/?lang=cs&u={ident}"
 
         try:
             response = self.session.get(
-                self.API_URL,
+                self.API_URLS[0],
                 params={"process": "download_file", "file_id": ident},
                 timeout=10,
             )
@@ -257,4 +270,4 @@ class FastshareScraper:
             return data.get("link") or data.get("url") or data.get("download_url")
         except Exception as exc:
             print(f"FS Link Error: {exc}")
-            return f"https://fastshare.cz/free/?lang=cs&u={ident}"
+            return f"https://fastshare.cloud/free/?lang=cs&u={ident}"

@@ -2,6 +2,13 @@
 
 Všechny důležité změny add-onu StreamCinema API jsou vedené v tomto souboru.
 
+## 0.2.7
+
+- Fastshare scraper nyní zkouší `fastshare.cloud` i `fastshare.cz`.
+- Fastshare API, login a web fallback pracují s oběma doménami.
+- Přidány záložky `Hledání` a `Sbírka`, aby se výsledky hledání nemíchaly s katalogem.
+- Po uložení streamů se GUI přepne do záložky `Sbírka` na uložené médium.
+
 ## 0.2.6
 
 - Opraveno ukládání vybraných streamů z fallback výsledkové stránky.

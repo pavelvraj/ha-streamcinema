@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Stream Cinema</title>
-    <link rel="stylesheet" href="static/style.css?v=0.2.4">
+    <link rel="stylesheet" href="static/style.css?v=0.2.7">
 </head>
 <body>
     <div class="app-shell">
@@ -24,30 +24,44 @@
         </header>
 
         <section id="status" class="status hidden"></section>
-        <section id="searchPanel" class="search-panel hidden"></section>
 
-        <main class="workspace">
-            <aside class="catalog">
-                <div class="catalog-toolbar">
-                    <h2>Katalog</h2>
-                    <select id="typeFilter">
-                        <option value="all">Vše</option>
-                        <option value="movie">Filmy</option>
-                        <option value="tvshow">Seriály</option>
-                    </select>
-                </div>
-                <input class="catalog-filter" id="catalogFilter" placeholder="Filtrovat katalog">
-                <div id="catalogList" class="catalog-list"></div>
-            </aside>
+        <nav class="tabs">
+            <button type="button" class="tab-button active" data-tab="searchTab">Hledání</button>
+            <button type="button" class="tab-button" data-tab="collectionTab">Sbírka</button>
+        </nav>
 
-            <section id="detailPanel" class="detail-panel">
+        <section id="searchTab" class="tab-page active">
+            <section id="searchPanel" class="search-panel">
                 <div class="empty-state">
-                    Vyber položku z katalogu nebo nejdřív něco vyhledej.
+                    Zadej název, vyber film nebo seriál a spusť hledání.
                 </div>
             </section>
-        </main>
+        </section>
+
+        <section id="collectionTab" class="tab-page">
+            <main class="workspace">
+                <aside class="catalog">
+                    <div class="catalog-toolbar">
+                        <h2>Sbírka</h2>
+                        <select id="typeFilter">
+                            <option value="all">Vše</option>
+                            <option value="movie">Filmy</option>
+                            <option value="tvshow">Seriály</option>
+                        </select>
+                    </div>
+                    <input class="catalog-filter" id="catalogFilter" placeholder="Filtrovat sbírku">
+                    <div id="catalogList" class="catalog-list"></div>
+                </aside>
+
+                <section id="detailPanel" class="detail-panel">
+                    <div class="empty-state">
+                        Vyber položku ze sbírky.
+                    </div>
+                </section>
+            </main>
+        </section>
     </div>
 
-    <script src="static/app.js?v=0.2.4"></script>
+    <script src="static/app.js?v=0.2.7"></script>
 </body>
 </html>

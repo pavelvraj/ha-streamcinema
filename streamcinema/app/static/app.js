@@ -161,7 +161,7 @@
         setSearching(true);
         showStatus("Vyhledávám streamy a metadata...", "info");
         if (panel) {
-            panel.classList.add("hidden");
+            panel.classList.remove("hidden");
             panel.innerHTML = "";
         }
 
@@ -256,9 +256,9 @@
         })
             .then(function (media) {
                 selectedMediaId = media._id;
-                el("searchPanel").classList.add("hidden");
                 showStatus("Vybrané streamy byly zařazeny do sbírky.", "success");
                 return loadCatalog().then(function () {
+                    switchTab("collectionTab");
                     return showDetail(media._id);
                 });
             })
@@ -408,6 +408,17 @@
             });
     }
 
+    function switchTab(tabId) {
+        var pages = document.querySelectorAll(".tab-page");
+        var buttons = document.querySelectorAll(".tab-button");
+        for (var i = 0; i < pages.length; i += 1) {
+            pages[i].className = pages[i].id === tabId ? "tab-page active" : "tab-page";
+        }
+        for (var j = 0; j < buttons.length; j += 1) {
+            buttons[j].className = buttons[j].getAttribute("data-tab") === tabId ? "tab-button active" : "tab-button";
+        }
+    }
+
     function handleClick(event) {
         var target = closestAction(event.target);
         if (!target) return;
@@ -458,6 +469,12 @@
         if (catalogFilter) catalogFilter.addEventListener("input", loadCatalog);
 
         document.addEventListener("click", handleClick);
+        var tabs = document.querySelectorAll(".tab-button");
+        for (var i = 0; i < tabs.length; i += 1) {
+            tabs[i].addEventListener("click", function () {
+                switchTab(this.getAttribute("data-tab"));
+            });
+        }
         document.addEventListener("change", function (event) {
             if (event.target && event.target.id === "selectAllStreams") {
                 toggleSearchStreams(event.target.checked);
