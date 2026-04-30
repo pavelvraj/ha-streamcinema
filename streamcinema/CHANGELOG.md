@@ -2,6 +2,11 @@
 
 Všechny důležité změny add-onu StreamCinema API jsou vedené v tomto souboru.
 
+## 0.3.2
+
+- Rozbalovací volby typu média a filtru sbírky nahrazeny jedním klikem ovládanými option tlačítky.
+- V detailu položky je nově možné ručně upravit hodnocení v procentech.
+
 ## 0.3.1
 
 - Výsledky vyhledávání seriálů se nově seskupují do sérií a dílů ještě před uložením do sbírky.

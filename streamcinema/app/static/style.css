@@ -63,6 +63,33 @@ button.danger {
     background: var(--danger);
 }
 
+.segmented {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 3px;
+    background: #0d0f12;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+}
+
+.segmented.compact {
+    flex-wrap: wrap;
+}
+
+.option-button {
+    background: transparent;
+    color: var(--muted);
+    border-radius: 4px;
+    padding: 7px 10px;
+    min-height: 34px;
+}
+
+.option-button.active {
+    background: var(--accent-2);
+    color: white;
+}
+
 input,
 select,
 textarea {
@@ -354,6 +381,12 @@ textarea {
     padding: 4px 8px;
 }
 
+.catalog-item .catalog-rating {
+    display: inline-flex;
+    color: white;
+    margin-top: 0;
+}
+
 .edit-form {
     border-top: 1px solid var(--line);
     margin: 18px 0;
@@ -362,7 +395,7 @@ textarea {
 
 .edit-grid {
     display: grid;
-    grid-template-columns: minmax(120px, 180px) minmax(180px, 1fr) minmax(180px, 1fr);
+    grid-template-columns: minmax(150px, 190px) minmax(120px, 160px) minmax(180px, 1fr) minmax(180px, 1fr);
     gap: 10px;
     margin-bottom: 10px;
 }

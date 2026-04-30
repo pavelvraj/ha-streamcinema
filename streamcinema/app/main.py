@@ -585,7 +585,7 @@ def render_search_page(result):
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Stream Cinema - výsledky</title>
-        <link rel="stylesheet" href="../static/style.css?v=0.3.1">
+        <link rel="stylesheet" href="../static/style.css?v=0.3.2">
     </head>
     <body>
         <div class="app-shell">
@@ -835,16 +835,22 @@ def update_media(media_id: str, payload: dict = Body(...)):
         poster = payload.get("poster")
         title = payload.get("title")
         fanart = payload.get("fanart")
+        rating = payload.get("rating")
+        try:
+            rating = max(0.0, min(100.0, float(rating))) if rating is not None else current.get("rating") or 0.0
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=400, detail="Invalid rating")
 
         conn.execute(
             """
             UPDATE media
-            SET type=?, title=?, plot=?, poster=?, fanart=?
+            SET type=?, title=?, rating=?, plot=?, poster=?, fanart=?
             WHERE id=?
             """,
             (
                 media_type,
                 title if title is not None else current.get("title") or "",
+                rating,
                 plot if plot is not None else current.get("plot") or "",
                 poster if poster is not None else current.get("poster") or "",
                 fanart if fanart is not None else (poster if poster is not None else current.get("fanart") or current.get("poster") or ""),

@@ -115,8 +115,20 @@
     }
 
     function getTypeFilter() {
-        var select = el("typeFilter");
-        return select ? select.value : "all";
+        var input = el("typeFilter");
+        return input ? input.value : "all";
+    }
+
+    function renderSegmentedInput(id, value, options) {
+        var html = '<input type="hidden" id="' + escapeHtml(id) + '" value="' + escapeHtml(value) + '">';
+        html += '<div class="segmented" role="group">';
+        for (var i = 0; i < options.length; i += 1) {
+            var option = options[i];
+            html += '<button type="button" class="option-button ' + (option.value === value ? "active" : "") + '" data-option-target="' +
+                escapeHtml(id) + '" data-option-value="' + escapeHtml(option.value) + '">' + escapeHtml(option.label) + '</button>';
+        }
+        html += '</div>';
+        return html;
     }
 
     function loadCatalog() {
@@ -372,7 +384,8 @@
             '<section class="edit-form">' +
                 '<h3>Upravit položku</h3>' +
                 '<div class="edit-grid">' +
-                    '<label>Typ<select id="editType"><option value="movie"' + (!isTvshow ? " selected" : "") + '>Film</option><option value="tvshow"' + (isTvshow ? " selected" : "") + '>Seriál</option></select></label>' +
+                    '<label>Typ' + renderSegmentedInput("editType", isTvshow ? "tvshow" : "movie", [{ value: "movie", label: "Film" }, { value: "tvshow", label: "Seriál" }]) + '</label>' +
+                    '<label>Hodnocení ČSFD (%)<input id="editRating" type="number" min="0" max="100" step="1" value="' + escapeHtml(item.rating || 0) + '"></label>' +
                     '<label>URL obrázku<input id="editPosterUrl" type="text" value="' + escapeHtml(poster) + '" placeholder="https://..."></label>' +
                     '<label>Vlastní obrázek<input id="editPosterFile" type="file" accept="image/*"></label>' +
                 '</div>' +
@@ -532,6 +545,7 @@
     function saveMediaEdits(mediaId) {
         var type = el("editType");
         var plot = el("editPlot");
+        var rating = el("editRating");
         showStatus("Ukládám změny položky...", "info");
         readPosterValue()
             .then(function (poster) {
@@ -540,6 +554,7 @@
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
                         type: type ? type.value : "movie",
+                        rating: rating ? rating.value : 0,
                         plot: plot ? plot.value : "",
                         poster: poster,
                     }),
@@ -601,6 +616,26 @@
         if (action === "delete-media") deleteMedia(id);
     }
 
+    function setOption(targetId, value) {
+        var input = el(targetId);
+        if (!input) return;
+        input.value = value;
+
+        var buttons = document.querySelectorAll('[data-option-target="' + targetId + '"]');
+        for (var i = 0; i < buttons.length; i += 1) {
+            buttons[i].className = buttons[i].getAttribute("data-option-value") === value ? "option-button active" : "option-button";
+        }
+
+        var event;
+        if (typeof Event === "function") {
+            event = new Event("change", { bubbles: true });
+        } else {
+            event = document.createEvent("Event");
+            event.initEvent("change", true, true);
+        }
+        input.dispatchEvent(event);
+    }
+
     function closestAction(node) {
         while (node && node !== document) {
             if (node.getAttribute && node.getAttribute("data-action")) return node;
@@ -637,6 +672,11 @@
         if (catalogFilter) catalogFilter.addEventListener("input", loadCatalog);
 
         document.addEventListener("click", handleClick);
+        document.addEventListener("click", function (event) {
+            var target = event.target;
+            if (!target || !target.getAttribute || !target.getAttribute("data-option-target")) return;
+            setOption(target.getAttribute("data-option-target"), target.getAttribute("data-option-value"));
+        });
         var tabs = document.querySelectorAll(".tab-button");
         for (var i = 0; i < tabs.length; i += 1) {
             tabs[i].addEventListener("click", function () {

@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Stream Cinema</title>
-    <link rel="stylesheet" href="static/style.css?v=0.3.1">
+    <link rel="stylesheet" href="static/style.css?v=0.3.2">
 </head>
 <body>
     <div class="app-shell">
@@ -15,10 +15,11 @@
             </div>
             <form class="search-box" id="searchForm" action="api/search" method="get">
                 <input type="text" id="searchInput" name="q" placeholder="Hledat film nebo seriál">
-                <select id="searchType" name="media_type">
-                    <option value="movie">Film</option>
-                    <option value="tvshow">Seriál</option>
-                </select>
+                <input type="hidden" id="searchType" name="media_type" value="movie">
+                <div class="segmented" role="group" aria-label="Typ hledání">
+                    <button type="button" class="option-button active" data-option-target="searchType" data-option-value="movie">Film</button>
+                    <button type="button" class="option-button" data-option-target="searchType" data-option-value="tvshow">Seriál</button>
+                </div>
                 <button type="submit" id="searchButton" onclick="window.streamCinemaSearch && window.streamCinemaSearch(event)">Hledat</button>
             </form>
         </header>
@@ -43,11 +44,12 @@
                 <aside class="catalog">
                     <div class="catalog-toolbar">
                         <h2>Sbírka</h2>
-                        <select id="typeFilter">
-                            <option value="all">Vše</option>
-                            <option value="movie">Filmy</option>
-                            <option value="tvshow">Seriály</option>
-                        </select>
+                        <input type="hidden" id="typeFilter" value="all">
+                        <div class="segmented compact" role="group" aria-label="Filtr sbírky">
+                            <button type="button" class="option-button active" data-option-target="typeFilter" data-option-value="all">Vše</button>
+                            <button type="button" class="option-button" data-option-target="typeFilter" data-option-value="movie">Filmy</button>
+                            <button type="button" class="option-button" data-option-target="typeFilter" data-option-value="tvshow">Seriály</button>
+                        </div>
                     </div>
                     <input class="catalog-filter" id="catalogFilter" placeholder="Filtrovat sbírku">
                     <div id="catalogList" class="catalog-list"></div>
@@ -62,6 +64,6 @@
         </section>
     </div>
 
-    <script src="static/app.js?v=0.3.1"></script>
+    <script src="static/app.js?v=0.3.2"></script>
 </body>
 </html>

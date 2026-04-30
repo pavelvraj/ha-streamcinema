@@ -2,6 +2,11 @@
 
 This file is intentionally duplicated at the repository root for Home Assistant compatibility. The add-on changelog source is `streamcinema/CHANGELOG.md`.
 
+## 0.3.2
+
+- Replaced media type and collection filter dropdowns with one-click option buttons.
+- Added manual rating editing in the media detail.
+
 ## 0.3.1
 
 - Search results for TV shows are now grouped into seasons and episodes before saving.
