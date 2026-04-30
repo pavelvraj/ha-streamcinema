@@ -2,6 +2,15 @@
 
 This file is intentionally duplicated at the repository root for Home Assistant compatibility. The add-on changelog source is `streamcinema/CHANGELOG.md`.
 
+## 0.3.0
+
+- Added deleting a whole movie or TV show collection item, including its streams.
+- Added media editing for Film/TV show type, plot, and poster via URL or uploaded image.
+- Re-groups streams after changing the media type.
+- Added working collection stream checkboxes and selected stream removal.
+- Added blue rating badges to every item in the collection list.
+- Added colored stream badges for provider and status.
+
 ## 0.2.9
 
 - Added Fastshare AJAX scraper based on the website endpoint `/test2.php`.

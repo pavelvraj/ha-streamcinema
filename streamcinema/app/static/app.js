@@ -84,6 +84,22 @@
         return hours ? (hours + " h " + minutes + " min") : (minutes + " min");
     }
 
+    function ratingBadge(value) {
+        return '<span class="catalog-rating">' + Number(value || 0).toFixed(0) + '%</span>';
+    }
+
+    function providerBadge(provider) {
+        var cls = provider === "webshare" ? "badge-ws" : "badge-fs";
+        return '<span class="provider-badge ' + cls + '">' + escapeHtml(provider || "-") + '</span>';
+    }
+
+    function statusBadge(status) {
+        var pending = status === "pending_delete";
+        return '<span class="status-badge ' + (pending ? "status-pending" : "status-active") + '">' +
+            (pending ? "ke vyřazení" : "aktivní") +
+            '</span>';
+    }
+
     function escapeHtml(value) {
         return String(value == null ? "" : value)
             .replace(/&/g, "&amp;")
@@ -138,10 +154,11 @@
             return '' +
                 '<button class="catalog-item ' + active + '" data-action="detail" data-id="' + escapeHtml(item._id) + '">' +
                     '<div class="thumb">' + (poster ? '<img src="' + escapeHtml(poster) + '" alt="">' : "") + '</div>' +
-                    '<div>' +
+                    '<div class="catalog-copy">' +
                         '<strong>' + escapeHtml(item.title) + '</strong>' +
                         '<span>' + typeLabel + ' · ' + (item.year || "-") + ' · ' + (item.stream_count || 0) + ' streamů</span>' +
                     '</div>' +
+                    ratingBadge(item.rating) +
                 '</button>';
         }).join("");
     }
@@ -286,6 +303,7 @@
         var genres = (item.genres || []).join(", ");
         var panel = el("detailPanel");
         if (!panel) return;
+        var isTvshow = item.type === "tvshow";
 
         panel.innerHTML = '' +
             '<div class="detail-head">' +
@@ -302,9 +320,20 @@
                     '<div class="detail-actions">' +
                         '<button type="button" data-action="check-media" data-id="' + escapeHtml(item._id) + '">Kontrola</button>' +
                         '<button type="button" class="danger" data-action="delete-pending" data-id="' + escapeHtml(item._id) + '">Vyřadit označené</button>' +
+                        '<button type="button" class="danger" data-action="delete-media" data-id="' + escapeHtml(item._id) + '">Smazat položku</button>' +
                     '</div>' +
                 '</div>' +
             '</div>' +
+            '<section class="edit-form">' +
+                '<h3>Upravit položku</h3>' +
+                '<div class="edit-grid">' +
+                    '<label>Typ<select id="editType"><option value="movie"' + (!isTvshow ? " selected" : "") + '>Film</option><option value="tvshow"' + (isTvshow ? " selected" : "") + '>Seriál</option></select></label>' +
+                    '<label>URL obrázku<input id="editPosterUrl" type="text" value="' + escapeHtml(poster) + '" placeholder="https://..."></label>' +
+                    '<label>Vlastní obrázek<input id="editPosterFile" type="file" accept="image/*"></label>' +
+                '</div>' +
+                '<label>Popis<textarea id="editPlot" rows="5">' + escapeHtml(item.plot || "") + '</textarea></label>' +
+                '<button type="button" data-action="save-media" data-id="' + escapeHtml(item._id) + '">Uložit změny</button>' +
+            '</section>' +
             (item.type === "tvshow" ? renderSeasons(item) : renderStreams(item.streams || []));
     }
 
@@ -340,10 +369,12 @@
             var pending = stream.status === "pending_delete";
             return '' +
                 '<div class="stream-row ' + (pending ? "pending" : "") + '">' +
+                    '<input type="checkbox" class="collection-stream-check" value="' + stream.id + '">' +
                     '<div>' +
                         '<strong>' + escapeHtml(stream.filename) + '</strong>' +
-                        '<span>' + escapeHtml(stream.provider) + ' · ' + escapeHtml(stream.format || "-") + ' · ' + formatBytes(stream.size) + ' · ' + (stream.width || "-") + 'x' + (stream.height || "-") + ' · ' + formatDuration(stream.duration) + '</span>' +
-                        '<span>Stav: ' + (pending ? "označeno k vyřazení" : "aktivní") + (stream.last_checked_at ? " · kontrola " + escapeHtml(stream.last_checked_at) : "") + '</span>' +
+                        '<span class="stream-badges">' + providerBadge(stream.provider) + statusBadge(stream.status) + '</span>' +
+                        '<span>' + escapeHtml(stream.format || "-") + ' · ' + formatBytes(stream.size) + ' · ' + (stream.width || "-") + 'x' + (stream.height || "-") + ' · ' + formatDuration(stream.duration) + '</span>' +
+                        '<span>' + (stream.last_checked_at ? "Kontrola " + escapeHtml(stream.last_checked_at) : "Zatim bez kontroly") + '</span>' +
                     '</div>' +
                     '<div class="row-actions">' +
                         '<button type="button" data-action="check-stream" data-id="' + stream.id + '">Kontrola</button>' +
@@ -394,7 +425,33 @@
     }
 
     function deletePendingStreams(mediaId) {
-        if (!confirm("Vyřadit všechny streamy označené ke smazání?")) return;
+        var checks = document.querySelectorAll(".collection-stream-check:checked");
+        var ids = [];
+        for (var i = 0; i < checks.length; i += 1) {
+            ids.push(Number(checks[i].value));
+        }
+
+        if (ids.length) {
+            if (!confirm("Vyřadit vybrané streamy?")) return;
+            requestJson(API_URL + "/media/" + encodeURIComponent(mediaId) + "/streams/delete_selected", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ stream_ids: ids }),
+            })
+                .then(function (result) {
+                    showStatus("Vyřazeno streamů: " + (result.deleted || 0) + ".", "success");
+                    return loadCatalog().then(function () {
+                        return showDetail(mediaId);
+                    });
+                })
+                .catch(function (error) {
+                    console.error(error);
+                    showStatus("Vyřazení vybraných streamů selhalo.", "error");
+                });
+            return;
+        }
+
+        if (!confirm("Nejsou vybrané žádné streamy. Vyřadit všechny streamy označené kontrolou jako chybné?")) return;
         requestJson(API_URL + "/media/" + encodeURIComponent(mediaId) + "/pending_streams", { method: "DELETE" })
             .then(function (result) {
                 showStatus("Vyřazeno streamů: " + (result.deleted || 0) + ".", "success");
@@ -405,6 +462,70 @@
             .catch(function (error) {
                 console.error(error);
                 showStatus("Vyřazení označených streamů selhalo.", "error");
+            });
+    }
+
+    function readPosterValue() {
+        var fileInput = el("editPosterFile");
+        var urlInput = el("editPosterUrl");
+        if (!fileInput || !fileInput.files || !fileInput.files.length) {
+            return Promise.resolve(urlInput ? urlInput.value.trim() : "");
+        }
+
+        return new Promise(function (resolve, reject) {
+            var reader = new FileReader();
+            reader.onload = function () {
+                resolve(String(reader.result || ""));
+            };
+            reader.onerror = function () {
+                reject(new Error("Image read failed"));
+            };
+            reader.readAsDataURL(fileInput.files[0]);
+        });
+    }
+
+    function saveMediaEdits(mediaId) {
+        var type = el("editType");
+        var plot = el("editPlot");
+        showStatus("Ukládám změny položky...", "info");
+        readPosterValue()
+            .then(function (poster) {
+                return requestJson(API_URL + "/media/" + encodeURIComponent(mediaId), {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        type: type ? type.value : "movie",
+                        plot: plot ? plot.value : "",
+                        poster: poster,
+                    }),
+                });
+            })
+            .then(function (media) {
+                selectedMediaId = media._id;
+                showStatus("Položka byla upravena.", "success");
+                return loadCatalog().then(function () {
+                    return showDetail(media._id);
+                });
+            })
+            .catch(function (error) {
+                console.error(error);
+                showStatus("Uložení změn položky selhalo.", "error");
+            });
+    }
+
+    function deleteMedia(mediaId) {
+        if (!confirm("Opravdu smazat celou položku ze sbírky včetně všech streamů?")) return;
+        requestJson(API_URL + "/media/" + encodeURIComponent(mediaId), { method: "DELETE" })
+            .then(function () {
+                selectedMediaId = null;
+                showStatus("Položka byla smazána.", "success");
+                var panel = el("detailPanel");
+                if (panel) panel.innerHTML = '<div class="empty-state">Vyber položku ze sbírky.</div>';
+                return loadCatalog();
+            })
+            .catch(function (error) {
+                console.error(error);
+                showStatus("Smazání položky selhalo.", "error");
             });
     }
 
@@ -431,6 +552,8 @@
         if (action === "delete-pending") deletePendingStreams(id);
         if (action === "check-stream") checkStream(id);
         if (action === "delete-stream") deleteStream(id);
+        if (action === "save-media") saveMediaEdits(id);
+        if (action === "delete-media") deleteMedia(id);
     }
 
     function closestAction(node) {

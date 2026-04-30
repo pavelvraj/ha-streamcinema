@@ -333,6 +333,31 @@ def add_stream(conn, media_id, stream):
     )
 
 
+def refresh_stream_grouping(conn, media_id):
+    rows = conn.execute(
+        "SELECT id, filename, width, height, format FROM streams WHERE media_id=?",
+        (media_id,),
+    ).fetchall()
+    for row in rows:
+        stream = dict(row)
+        info = parse_stream_info(stream.get("filename") or "")
+        conn.execute(
+            """
+            UPDATE streams
+            SET season=?, episode=?, format=?, width=?, height=?
+            WHERE id=?
+            """,
+            (
+                info["season"],
+                info["episode"],
+                stream.get("format") or info["format"],
+                stream.get("width") or info["width"],
+                stream.get("height") or info["height"],
+                stream["id"],
+            ),
+        )
+
+
 def serialize_stream_row(row):
     s = dict(row)
     return {
@@ -542,7 +567,7 @@ def render_search_page(result):
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Stream Cinema - výsledky</title>
-        <link rel="stylesheet" href="../static/style.css?v=0.2.3">
+        <link rel="stylesheet" href="../static/style.css?v=0.3.0">
     </head>
     <body>
         <div class="app-shell">
@@ -775,6 +800,62 @@ def add_media(payload: dict = Body(...)):
         conn.close()
 
 
+@app.put("/api/media/{media_id}")
+def update_media(media_id: str, payload: dict = Body(...)):
+    conn = get_db_connection()
+    try:
+        row = conn.execute("SELECT * FROM media WHERE id=?", (media_id,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Media not found")
+
+        current = dict(row)
+        media_type = payload.get("type") or current.get("type") or "movie"
+        if media_type not in ("movie", "tvshow"):
+            raise HTTPException(status_code=400, detail="Invalid media type")
+
+        plot = payload.get("plot")
+        poster = payload.get("poster")
+        title = payload.get("title")
+        fanart = payload.get("fanart")
+
+        conn.execute(
+            """
+            UPDATE media
+            SET type=?, title=?, plot=?, poster=?, fanart=?
+            WHERE id=?
+            """,
+            (
+                media_type,
+                title if title is not None else current.get("title") or "",
+                plot if plot is not None else current.get("plot") or "",
+                poster if poster is not None else current.get("poster") or "",
+                fanart if fanart is not None else (poster if poster is not None else current.get("fanart") or current.get("poster") or ""),
+                media_id,
+            ),
+        )
+        refresh_stream_grouping(conn, media_id)
+        conn.commit()
+        row = conn.execute("SELECT * FROM media WHERE id=?", (media_id,)).fetchone()
+        return serialize_media_row(conn, row, include_streams=True)
+    finally:
+        conn.close()
+
+
+@app.delete("/api/media/{media_id}")
+def delete_media(media_id: str):
+    conn = get_db_connection()
+    try:
+        row = conn.execute("SELECT 1 FROM media WHERE id=?", (media_id,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Media not found")
+        conn.execute("DELETE FROM streams WHERE media_id=?", (media_id,))
+        conn.execute("DELETE FROM media WHERE id=?", (media_id,))
+        conn.commit()
+        return {"status": "ok"}
+    finally:
+        conn.close()
+
+
 @app.get("/api/search_manual")
 def manual_search(q: str):
     media_ids = search_and_save(q)
@@ -847,6 +928,31 @@ def delete_pending_streams(media_id: str):
         cursor = conn.execute(
             "DELETE FROM streams WHERE media_id=? AND status='pending_delete'",
             (media_id,),
+        )
+        conn.commit()
+        return {"status": "ok", "deleted": cursor.rowcount}
+    finally:
+        conn.close()
+
+
+@app.post("/api/media/{media_id}/streams/delete_selected")
+def delete_selected_streams(media_id: str, payload: dict = Body(...)):
+    stream_ids = []
+    for value in payload.get("stream_ids") or []:
+        try:
+            stream_ids.append(int(value))
+        except (TypeError, ValueError):
+            continue
+
+    if not stream_ids:
+        return {"status": "ok", "deleted": 0}
+
+    placeholders = ",".join("?" for _ in stream_ids)
+    conn = get_db_connection()
+    try:
+        cursor = conn.execute(
+            f"DELETE FROM streams WHERE media_id=? AND id IN ({placeholders})",
+            [media_id] + stream_ids,
         )
         conn.commit()
         return {"status": "ok", "deleted": cursor.rowcount}

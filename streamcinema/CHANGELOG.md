@@ -2,6 +2,15 @@
 
 Všechny důležité změny add-onu StreamCinema API jsou vedené v tomto souboru.
 
+## 0.3.0
+
+- Ve sbírce přidáno smazání celé položky filmu nebo seriálu včetně streamů.
+- Detail položky nově umožňuje změnit typ Film/Seriál, popis a poster pomocí URL nebo nahraného obrázku.
+- Po změně typu se streamy znovu přeskupí podle sérií a dílů.
+- U streamů ve sbírce jsou funkční checkboxy a tlačítko `Vyřadit označené` maže vybrané streamy.
+- Katalog zobrazuje modrý štítek s procentem hodnocení u každé položky.
+- Streamy mají barevné badge pro zdroj i stav.
+
 ## 0.2.9
 
 - Přidán Fastshare AJAX scraper podle webového endpointu `/test2.php`.
