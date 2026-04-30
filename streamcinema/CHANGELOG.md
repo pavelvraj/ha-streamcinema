@@ -2,6 +2,11 @@
 
 Všechny důležité změny add-onu StreamCinema API jsou vedené v tomto souboru.
 
+## 0.3.3
+
+- Streamy ve vyhledávání i ve sbírce mají kompaktnější řádek.
+- Formát, velikost, rozlišení a délka jsou nově v jedné řádce vedle badge.
+
 ## 0.3.2
 
 - Rozbalovací volby typu média a filtru sbírky nahrazeny jedním klikem ovládanými option tlačítky.

@@ -100,6 +100,16 @@
             '</span>';
     }
 
+    function streamMetaLine(stream, includeDuration) {
+        var parts = [
+            escapeHtml(stream.format || "-"),
+            formatBytes(stream.size),
+            (stream.width || "-") + "x" + (stream.height || "-"),
+        ];
+        if (includeDuration) parts.push(formatDuration(stream.duration));
+        return '<span class="stream-meta">' + parts.join(" · ") + '</span>';
+    }
+
     function escapeHtml(value) {
         return String(value == null ? "" : value)
             .replace(/&/g, "&amp;")
@@ -289,15 +299,13 @@
         return streams.map(function (entry, position) {
             var stream = entry.stream || entry;
             var index = entry.index != null ? entry.index : position;
-            var season = stream.season && stream.episode ? '<span>S' + stream.season + ' E' + stream.episode + '</span>' : "";
+            var season = stream.season && stream.episode ? '<span class="episode-badge">S' + stream.season + ' E' + stream.episode + '</span>' : "";
             return '' +
                 '<label class="stream-row selectable">' +
                     '<input type="checkbox" class="search-stream-check" data-index="' + index + '">' +
                     '<div>' +
                         '<strong>' + escapeHtml(stream.filename) + '</strong>' +
-                        '<span class="stream-badges">' + providerBadge(stream.provider) + '</span>' +
-                        '<span>' + escapeHtml(stream.format || "-") + ' · ' + formatBytes(stream.size) + ' · ' + (stream.width || "-") + 'x' + (stream.height || "-") + '</span>' +
-                        season +
+                        '<span class="stream-badges">' + providerBadge(stream.provider) + streamMetaLine(stream, false) + season + '</span>' +
                     '</div>' +
                 '</label>';
         }).join("");
@@ -430,8 +438,7 @@
                     '<input type="checkbox" class="collection-stream-check" value="' + stream.id + '">' +
                     '<div>' +
                         '<strong>' + escapeHtml(stream.filename) + '</strong>' +
-                        '<span class="stream-badges">' + providerBadge(stream.provider) + statusBadge(stream.status) + '</span>' +
-                        '<span>' + escapeHtml(stream.format || "-") + ' · ' + formatBytes(stream.size) + ' · ' + (stream.width || "-") + 'x' + (stream.height || "-") + ' · ' + formatDuration(stream.duration) + '</span>' +
+                        '<span class="stream-badges">' + providerBadge(stream.provider) + statusBadge(stream.status) + streamMetaLine(stream, true) + '</span>' +
                         '<span>' + (stream.last_checked_at ? "Kontrola " + escapeHtml(stream.last_checked_at) : "Zatím bez kontroly") + '</span>' +
                     '</div>' +
                     '<div class="row-actions">' +

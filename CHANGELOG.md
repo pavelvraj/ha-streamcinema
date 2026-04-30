@@ -2,6 +2,11 @@
 
 This file is intentionally duplicated at the repository root for Home Assistant compatibility. The add-on changelog source is `streamcinema/CHANGELOG.md`.
 
+## 0.3.3
+
+- Made stream rows more compact in search results and the collection.
+- Format, size, resolution, and duration now sit on the same line as badges.
+
 ## 0.3.2
 
 - Replaced media type and collection filter dropdowns with one-click option buttons.
