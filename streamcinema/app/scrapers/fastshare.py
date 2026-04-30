@@ -57,11 +57,38 @@ class FastshareScraper:
         if self.username and self.password and not self.logged_in:
             self.login()
 
-        results = self._search_api(query)
-        if results:
-            return results
+        seen = set()
+        merged = []
+        for search_query in self._query_variants(query):
+            results = self._search_api(search_query)
+            for item in results:
+                if item["ident"] in seen:
+                    continue
+                merged.append(item)
+                seen.add(item["ident"])
+            if merged:
+                return merged
 
-        return self._search_web(query)
+        for search_query in self._query_variants(query):
+            results = self._search_web(search_query)
+            for item in results:
+                if item["ident"] in seen:
+                    continue
+                merged.append(item)
+                seen.add(item["ident"])
+            if merged:
+                return merged
+
+        return []
+
+    def _query_variants(self, query):
+        cleaned = re.sub(r"\s+", " ", query.strip())
+        variants = [cleaned]
+        words = [word for word in re.split(r"\s+", cleaned) if len(word) >= 4]
+        if len(words) > 1:
+            variants.append(words[-1])
+            variants.extend(words)
+        return list(dict.fromkeys(variants))
 
     def _search_api(self, query):
         results = []
@@ -107,12 +134,19 @@ class FastshareScraper:
                 or data.get("list")
                 or []
             )
+            search = data.get("search")
+            if not items and isinstance(search, dict):
+                items = search.get("file") or search.get("files") or []
             if isinstance(items, dict):
                 items = list(items.values())
         else:
             items = []
 
         if not items:
+            if isinstance(data, dict) and isinstance(data.get("search"), dict):
+                total = data["search"].get("total")
+                if str(total) == "0":
+                    return []
             preview = str(data)
             print(f"FS API Search Debug: unrecognized response {preview[:500]}")
 

@@ -2,6 +2,12 @@
 
 Všechny důležité změny add-onu StreamCinema API jsou vedené v tomto souboru.
 
+## 0.2.8
+
+- Fastshare parser nově čte výsledky z vnořeného tvaru `search.file`.
+- Fastshare hledání zkouší varianty víceslovných dotazů, například `Jack Reacher`, `Reacher`, `Jack`.
+- Prázdná Fastshare odpověď `total=0` už se neloguje jako nerozpoznaná odpověď.
+
 ## 0.2.7
 
 - Fastshare scraper nyní zkouší `fastshare.cloud` i `fastshare.cz`.

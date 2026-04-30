@@ -2,6 +2,12 @@
 
 This file is intentionally duplicated at the repository root for Home Assistant compatibility. The add-on changelog source is `streamcinema/CHANGELOG.md`.
 
+## 0.2.8
+
+- Fastshare parser now reads results from nested `search.file` responses.
+- Fastshare search tries multi-word query variants, for example `Jack Reacher`, `Reacher`, and `Jack`.
+- Empty Fastshare `total=0` responses are no longer logged as unrecognized responses.
+
 ## 0.2.7
 
 - Fastshare scraper now tries both `fastshare.cloud` and `fastshare.cz`.
