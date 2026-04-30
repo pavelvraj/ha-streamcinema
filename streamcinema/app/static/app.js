@@ -110,6 +110,11 @@
         return '<span class="stream-meta">' + parts.join(" · ") + '</span>';
     }
 
+    function streamIdent(stream) {
+        if (stream.ident && String(stream.ident).indexOf(":") > 0) return stream.ident;
+        return (stream.provider || "") + ":" + (stream.provider_ident || stream.ident || "");
+    }
+
     function escapeHtml(value) {
         return String(value == null ? "" : value)
             .replace(/&/g, "&amp;")
@@ -301,13 +306,14 @@
             var index = entry.index != null ? entry.index : position;
             var season = stream.season && stream.episode ? '<span class="episode-badge">S' + stream.season + ' E' + stream.episode + '</span>' : "";
             return '' +
-                '<label class="stream-row selectable">' +
+                '<div class="stream-row selectable">' +
                     '<input type="checkbox" class="search-stream-check" data-index="' + index + '">' +
                     '<div>' +
                         '<strong>' + escapeHtml(stream.filename) + '</strong>' +
                         '<span class="stream-badges">' + providerBadge(stream.provider) + streamMetaLine(stream, false) + season + '</span>' +
                     '</div>' +
-                '</label>';
+                    '<button type="button" class="play-button" data-action="play-stream" data-ident="' + escapeHtml(streamIdent(stream)) + '" data-title="' + escapeHtml(stream.filename) + '">Přehrát</button>' +
+                '</div>';
         }).join("");
     }
 
@@ -383,8 +389,6 @@
                     '</div>' +
                     '<p class="plot">' + escapeHtml(item.plot || "Bez popisu.") + '</p>' +
                     '<div class="detail-actions">' +
-                        '<button type="button" data-action="check-media" data-id="' + escapeHtml(item._id) + '">Kontrola</button>' +
-                        '<button type="button" class="danger" data-action="delete-pending" data-id="' + escapeHtml(item._id) + '">Vyřadit označené</button>' +
                         '<button type="button" class="danger" data-action="delete-media" data-id="' + escapeHtml(item._id) + '">Smazat položku</button>' +
                     '</div>' +
                 '</div>' +
@@ -400,7 +404,16 @@
                 '<label>Popis<textarea id="editPlot" rows="5">' + escapeHtml(item.plot || "") + '</textarea></label>' +
                 '<button type="button" data-action="save-media" data-id="' + escapeHtml(item._id) + '">Uložit změny</button>' +
             '</section>' +
+            renderStreamBulkActions(item) +
             (item.type === "tvshow" ? renderSeasons(item) : renderStreams(item.streams || []));
+    }
+
+    function renderStreamBulkActions(item) {
+        return '' +
+            '<div class="stream-toolbar">' +
+                '<button type="button" data-action="check-media" data-id="' + escapeHtml(item._id) + '">Kontrola</button>' +
+                '<button type="button" class="danger" data-action="delete-pending" data-id="' + escapeHtml(item._id) + '">Vyřadit označené</button>' +
+            '</div>';
     }
 
     function renderSeasons(item) {
@@ -442,11 +455,89 @@
                         '<span>' + (stream.last_checked_at ? "Kontrola " + escapeHtml(stream.last_checked_at) : "Zatím bez kontroly") + '</span>' +
                     '</div>' +
                     '<div class="row-actions">' +
+                        '<button type="button" class="play-button" data-action="play-stream" data-ident="' + escapeHtml(stream.ident) + '" data-title="' + escapeHtml(stream.filename) + '">Přehrát</button>' +
                         '<button type="button" data-action="check-stream" data-id="' + stream.id + '">Kontrola</button>' +
                         '<button type="button" class="danger" data-action="delete-stream" data-id="' + stream.id + '">Vyřadit</button>' +
                     '</div>' +
                 '</div>';
         }).join("") + '</div>';
+    }
+
+    function ensurePlayerModal() {
+        var modal = el("playerModal");
+        if (modal) return modal;
+
+        modal = document.createElement("section");
+        modal.id = "playerModal";
+        modal.className = "player-modal hidden";
+        modal.innerHTML = '' +
+            '<div class="player-dialog">' +
+                '<div class="player-header">' +
+                    '<strong id="playerTitle">Přehrávač</strong>' +
+                    '<div class="player-actions">' +
+                        '<button type="button" data-action="fullscreen-player">Celá obrazovka</button>' +
+                        '<button type="button" data-action="close-player">Zavřít</button>' +
+                    '</div>' +
+                '</div>' +
+                '<video id="streamPlayer" controls playsinline preload="metadata"></video>' +
+                '<a id="playerOpenLink" class="button-link" target="_blank" rel="noreferrer">Otevřít link</a>' +
+            '</div>';
+        document.body.appendChild(modal);
+        return modal;
+    }
+
+    function playStream(ident, title) {
+        if (!ident || ident.indexOf(":") < 1) {
+            showStatus("Stream nemá identifikátor pro přehrání.", "error");
+            return;
+        }
+
+        showStatus("Získávám stream link...", "info");
+        requestJson(API_URL + "/file_link/" + encodeURIComponent(ident))
+            .then(function (data) {
+                if (!data.link) {
+                    showStatus("Provider nevrátil přímý stream link.", "error");
+                    return;
+                }
+                var modal = ensurePlayerModal();
+                var player = el("streamPlayer");
+                var titleNode = el("playerTitle");
+                var openLink = el("playerOpenLink");
+                titleNode.textContent = title || "Přehrávač";
+                openLink.href = data.link;
+                player.src = data.link;
+                modal.className = "player-modal";
+                showStatus("", "info");
+                var playPromise = player.play();
+                if (playPromise && playPromise.catch) {
+                    playPromise.catch(function () {
+                        showStatus("Přehrávač je připravený. Spusť ho tlačítkem Play.", "info");
+                    });
+                }
+            })
+            .catch(function (error) {
+                console.error(error);
+                showStatus("Nepodařilo se získat stream link.", "error");
+            });
+    }
+
+    function closePlayer() {
+        var modal = el("playerModal");
+        var player = el("streamPlayer");
+        if (player) {
+            player.pause();
+            player.removeAttribute("src");
+            player.load();
+        }
+        if (modal) modal.className = "player-modal hidden";
+    }
+
+    function fullscreenPlayer() {
+        var player = el("streamPlayer");
+        if (!player) return;
+        if (player.requestFullscreen) player.requestFullscreen();
+        else if (player.webkitEnterFullscreen) player.webkitEnterFullscreen();
+        else if (player.webkitRequestFullscreen) player.webkitRequestFullscreen();
     }
 
     function checkMediaStreams(mediaId) {
@@ -621,6 +712,12 @@
         if (action === "delete-stream") deleteStream(id);
         if (action === "save-media") saveMediaEdits(id);
         if (action === "delete-media") deleteMedia(id);
+        if (action === "play-stream") {
+            event.preventDefault();
+            playStream(target.getAttribute("data-ident"), target.getAttribute("data-title"));
+        }
+        if (action === "close-player") closePlayer();
+        if (action === "fullscreen-player") fullscreenPlayer();
     }
 
     function setOption(targetId, value) {

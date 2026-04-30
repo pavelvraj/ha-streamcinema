@@ -2,6 +2,13 @@
 
 This file is intentionally duplicated at the repository root for Home Assistant compatibility. The add-on changelog source is `streamcinema/CHANGELOG.md`.
 
+## 0.3.4
+
+- Added a `Přehrát` button to each stream.
+- The GUI can resolve direct links through `/api/file_link/...` and open them in an embedded HTML5 player.
+- The player includes controls, fullscreen support, and an external open-link fallback.
+- Moved the stream bulk actions `Kontrola` and `Vyřadit označené` directly above the stream list.
+
 ## 0.3.3
 
 - Made stream rows more compact in search results and the collection.

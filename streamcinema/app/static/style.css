@@ -63,6 +63,10 @@ button.danger {
     background: var(--danger);
 }
 
+button.play-button {
+    background: var(--accent-2);
+}
+
 .segmented {
     display: inline-flex;
     align-items: center;
@@ -321,6 +325,16 @@ textarea {
     margin-bottom: 10px;
 }
 
+.stream-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    border-top: 1px solid var(--line);
+    margin-top: 18px;
+    padding-top: 14px;
+}
+
 .detail-panel {
     min-height: 680px;
     padding: 16px;
@@ -547,7 +561,7 @@ summary {
 }
 
 .stream-row.selectable {
-    grid-template-columns: 24px 1fr;
+    grid-template-columns: 24px minmax(0, 1fr) auto;
     cursor: pointer;
 }
 
@@ -581,6 +595,62 @@ summary {
     color: var(--muted);
 }
 
+.player-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    display: grid;
+    place-items: center;
+    padding: 20px;
+    background: rgba(0, 0, 0, 0.78);
+}
+
+.player-modal.hidden {
+    display: none;
+}
+
+.player-dialog {
+    width: min(1100px, 96vw);
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 12px;
+    box-shadow: 0 18px 60px rgba(0, 0, 0, 0.55);
+}
+
+.player-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 10px;
+}
+
+.player-header strong {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.player-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+#streamPlayer {
+    width: 100%;
+    max-height: 74vh;
+    aspect-ratio: 16 / 9;
+    background: #050607;
+    border-radius: 6px;
+}
+
+#playerOpenLink {
+    margin-top: 10px;
+}
+
 @media (max-width: 900px) {
     .topbar,
     .detail-head {
@@ -611,5 +681,19 @@ summary {
 
     .row-actions {
         grid-column: 2;
+    }
+
+    .stream-row.selectable {
+        grid-template-columns: auto minmax(0, 1fr);
+    }
+
+    .stream-row.selectable .play-button {
+        grid-column: 2;
+        justify-self: flex-start;
+    }
+
+    .player-header {
+        align-items: flex-start;
+        flex-direction: column;
     }
 }

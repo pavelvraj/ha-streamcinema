@@ -2,6 +2,13 @@
 
 Všechny důležité změny add-onu StreamCinema API jsou vedené v tomto souboru.
 
+## 0.3.4
+
+- U každého streamu přidáno tlačítko `Přehrát`.
+- GUI umí získat přímý link přes `/api/file_link/...` a otevřít ho ve vestavěném HTML5 přehrávači.
+- Přehrávač má ovládání, možnost celé obrazovky a odkaz pro otevření streamu mimo GUI.
+- Akce `Kontrola` a `Vyřadit označené` jsou přesunuté přímo nad seznam streamů.
+
 ## 0.3.3
 
 - Streamy ve vyhledávání i ve sbírce mají kompaktnější řádek.
