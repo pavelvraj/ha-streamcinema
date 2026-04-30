@@ -1,3 +1,4 @@
+import base64
 import re
 from urllib.parse import quote, urljoin, urlparse
 
@@ -70,6 +71,16 @@ class FastshareScraper:
                 return merged
 
         for search_query in self._query_variants(query):
+            results = self._search_ajax(search_query)
+            for item in results:
+                if item["ident"] in seen:
+                    continue
+                merged.append(item)
+                seen.add(item["ident"])
+            if merged:
+                return merged
+
+        for search_query in self._query_variants(query):
             results = self._search_web(search_query)
             for item in results:
                 if item["ident"] in seen:
@@ -89,6 +100,50 @@ class FastshareScraper:
             variants.append(words[-1])
             variants.extend(words)
         return list(dict.fromkeys(variants))
+
+    def _search_ajax(self, query):
+        results = []
+        seen = set()
+        encoded = base64.b64encode(query.lower().encode("utf-8")).decode("ascii")
+
+        for base_url in self.BASE_URLS:
+            referer = f"{base_url}/{quote(query.lower().replace(' ', '-'))}/s"
+            for limit in (1, 33, 65):
+                params = {
+                    "token": "streamcinema",
+                    "u": "",
+                    "search_purpose": 0,
+                    "search_resolution": 0,
+                    "order": "",
+                    "type": "video",
+                    "term": encoded,
+                    "plain_search": 0,
+                    "limit": limit,
+                    "step": 32,
+                }
+                try:
+                    response = self.session.get(
+                        f"{base_url}/test2.php",
+                        params=params,
+                        headers={"Referer": referer},
+                        timeout=10,
+                    )
+                    response.raise_for_status()
+                    page_results = self._parse_ajax_html(response.text)
+                    if not page_results:
+                        break
+                    for item in page_results:
+                        if item["ident"] in seen:
+                            continue
+                        results.append(item)
+                        seen.add(item["ident"])
+                except Exception as exc:
+                    print(f"FS AJAX Search Error ({base_url}): {exc}")
+                    break
+            if results:
+                return results
+
+        return results
 
     def _search_api(self, query):
         results = []
@@ -249,10 +304,55 @@ class FastshareScraper:
 
         return results[:20]
 
+    def _parse_ajax_html(self, html):
+        soup = BeautifulSoup(html, "lxml")
+        results = []
+        seen = set()
+
+        for item in soup.select("li.search_item"):
+            link = item.select_one(".video_detail p a[href]") or item.select_one("a[href*='fastshare']")
+            if not link:
+                continue
+
+            href = link.get("href") or ""
+            ident = self._ident_from_url(href)
+            if not ident or ident in seen:
+                continue
+
+            name = link.get_text(" ", strip=True)
+            if not name:
+                name = href.rsplit("/", 1)[-1].replace("-", " ")
+
+            detail_text = item.get_text(" ", strip=True)
+            resolution = re.search(r"(\d{3,4})\s*x\s*(\d{3,4})", detail_text, re.I)
+            duration = re.search(r"(\d{1,2}):(\d{2}):(\d{2})", detail_text)
+
+            result = {
+                "provider": "fastshare",
+                "ident": ident,
+                "name": name,
+                "size": self._parse_size(detail_text),
+            }
+            if resolution:
+                result["width"] = int(resolution.group(1))
+                result["height"] = int(resolution.group(2))
+            if duration:
+                result["duration"] = (
+                    int(duration.group(1)) * 3600
+                    + int(duration.group(2)) * 60
+                    + int(duration.group(3))
+                )
+
+            results.append(result)
+            seen.add(ident)
+
+        return results
+
     def _ident_from_url(self, url):
         patterns = [
             r"[?&]id=(\d+)",
             r"/file/(\d+)",
+            r"fastshare\.(?:cloud|cz)/(\d+)/",
             r"/(\d+)[-/]",
             r"/download/(\d+)",
         ]

@@ -2,6 +2,12 @@
 
 Všechny důležité změny add-onu StreamCinema API jsou vedené v tomto souboru.
 
+## 0.2.9
+
+- Přidán Fastshare AJAX scraper podle webového endpointu `/test2.php`.
+- Fastshare AJAX hledání posílá base64 dotaz stejně jako web `fastshare.cloud/<dotaz>/s`.
+- Parser Fastshare HTML výsledků čte identifikátor, název, velikost, rozlišení a délku.
+
 ## 0.2.8
 
 - Fastshare parser nově čte výsledky z vnořeného tvaru `search.file`.

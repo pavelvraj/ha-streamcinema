@@ -2,6 +2,12 @@
 
 This file is intentionally duplicated at the repository root for Home Assistant compatibility. The add-on changelog source is `streamcinema/CHANGELOG.md`.
 
+## 0.2.9
+
+- Added Fastshare AJAX scraper based on the website endpoint `/test2.php`.
+- Fastshare AJAX search now sends the base64 query used by `fastshare.cloud/<query>/s`.
+- Fastshare HTML result parsing extracts ident, name, size, resolution, and duration.
+
 ## 0.2.8
 
 - Fastshare parser now reads results from nested `search.file` responses.
