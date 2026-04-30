@@ -221,9 +221,11 @@ webshare_username: ""
 webshare_password: ""
 fastshare_username: ""
 fastshare_password: ""
+csfd_api_url: ""
 ```
 
 Webshare nebo Fastshare může zůstat prázdný, ale pro získávání stream linků je obvykle potřeba funkční účet u daného providera.
+`csfd_api_url` je volitelná adresa externí ČSFD API služby kompatibilní s `node-csfd-api`, například `http://192.168.1.10:3000`. Když je prázdná, add-on používá vlastní Python scraper ČSFD.
 
 5. Ulož konfiguraci.
 6. V záložce `Info` klikni na `Start`.
@@ -313,6 +315,9 @@ Podporované volby:
 | `webshare_password` | Heslo pro Webshare. |
 | `fastshare_username` | Uživatelské jméno pro Fastshare. |
 | `fastshare_password` | Heslo pro Fastshare. |
+| `csfd_api_url` | Volitelná URL externí služby `node-csfd-api`; pokud je vyplněná, metadata z ČSFD se zkusí nejdřív přes ni. |
+
+Oficiální IMDb API je dostupné přes AWS Data Exchange jako placený licencovaný produkt. Add-on proto dál používá neoficiální IMDb suggestion fallback jen jako nouzový zdroj základních metadat.
 
 ## Troubleshooting
 
@@ -401,6 +406,7 @@ CSFD Search Error: bot protection page returned
 ```
 
 V takovém případě se médium uloží s fallback metadaty nebo bez metadat.
+Pokud se to opakuje, můžeš vedle add-onu spustit `bartholomej/node-csfd-api` a do konfigurace add-onu vyplnit `csfd_api_url`, například `http://IP_ADRESA:3000`. Add-on pak použije endpointy `/search/<dotaz>` a `/movie/<id>` z této služby.
 
 ### Webshare nebo Fastshare nic nenajde
 

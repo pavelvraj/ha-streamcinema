@@ -1,5 +1,5 @@
 name: "StreamCinema API"
-version: "0.3.0"
+version: "0.3.1"
 slug: "streamcinema"
 description: "Vlastni StreamCinema backend s Webshare a Fastshare"
 arch:
@@ -20,8 +20,10 @@ options:
   webshare_password: ""
   fastshare_username: ""
   fastshare_password: ""
+  csfd_api_url: ""
 schema:
   webshare_username: str
   webshare_password: password
   fastshare_username: str
   fastshare_password: password
+  csfd_api_url: str

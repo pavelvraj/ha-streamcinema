@@ -222,9 +222,51 @@
                 '<label><input type="checkbox" id="selectAllStreams"> Vybrat vše</label>' +
                 '<button type="button" data-action="save-selected">Zařadit vybrané do sbírky</button>' +
             '</div>' +
-            '<div class="stream-table">' + renderSearchStreamRows(streams) + '</div>';
+            renderSearchStreams(metadata.type, streams);
 
         panel.classList.remove("hidden");
+    }
+
+    function renderSearchStreams(mediaType, streams) {
+        if (mediaType !== "tvshow") {
+            return '<div class="stream-table">' + renderSearchStreamRows(streams) + '</div>';
+        }
+
+        var grouped = {};
+        var loose = [];
+        for (var i = 0; i < streams.length; i += 1) {
+            var stream = streams[i];
+            if (stream.season && stream.episode) {
+                if (!grouped[stream.season]) grouped[stream.season] = {};
+                if (!grouped[stream.season][stream.episode]) grouped[stream.season][stream.episode] = [];
+                grouped[stream.season][stream.episode].push({ stream: stream, index: i });
+            } else {
+                loose.push({ stream: stream, index: i });
+            }
+        }
+
+        var seasons = Object.keys(grouped).sort(function (a, b) { return Number(a) - Number(b); });
+        if (!seasons.length) {
+            return '<h3>Neroztříděné streamy</h3><div class="stream-table">' + renderSearchStreamRows(streams) + '</div>';
+        }
+
+        var html = '<h3>Série a díly</h3><div class="seasons">';
+        for (var s = 0; s < seasons.length; s += 1) {
+            var season = seasons[s];
+            var episodes = Object.keys(grouped[season]).sort(function (a, b) { return Number(a) - Number(b); });
+            html += '<details open><summary>Série ' + escapeHtml(season) + '</summary>';
+            for (var e = 0; e < episodes.length; e += 1) {
+                var episode = episodes[e];
+                html += '<div class="episode-block"><h4>Díl ' + escapeHtml(episode) + '</h4>' +
+                    '<div class="stream-table">' + renderSearchStreamRows(grouped[season][episode]) + '</div></div>';
+            }
+            html += '</details>';
+        }
+        html += '</div>';
+        if (loose.length) {
+            html += '<h3>Neroztříděné streamy</h3><div class="stream-table">' + renderSearchStreamRows(loose) + '</div>';
+        }
+        return html;
     }
 
     function renderSearchStreamRows(streams) {
@@ -232,14 +274,17 @@
             return '<div class="empty-list">Nebyly nalezeny žádné streamy.</div>';
         }
 
-        return streams.map(function (stream, index) {
+        return streams.map(function (entry, position) {
+            var stream = entry.stream || entry;
+            var index = entry.index != null ? entry.index : position;
             var season = stream.season && stream.episode ? '<span>S' + stream.season + ' E' + stream.episode + '</span>' : "";
             return '' +
                 '<label class="stream-row selectable">' +
                     '<input type="checkbox" class="search-stream-check" data-index="' + index + '">' +
                     '<div>' +
                         '<strong>' + escapeHtml(stream.filename) + '</strong>' +
-                        '<span>' + escapeHtml(stream.provider) + ' · ' + escapeHtml(stream.format || "-") + ' · ' + formatBytes(stream.size) + ' · ' + (stream.width || "-") + 'x' + (stream.height || "-") + '</span>' +
+                        '<span class="stream-badges">' + providerBadge(stream.provider) + '</span>' +
+                        '<span>' + escapeHtml(stream.format || "-") + ' · ' + formatBytes(stream.size) + ' · ' + (stream.width || "-") + 'x' + (stream.height || "-") + '</span>' +
                         season +
                     '</div>' +
                 '</label>';

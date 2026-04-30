@@ -36,7 +36,7 @@ def load_config():
 config = load_config()
 WS = WebshareScraper(config.get("webshare_username"), config.get("webshare_password"))
 FS = FastshareScraper(config.get("fastshare_username"), config.get("fastshare_password"))
-CSFD = CSFDScraper()
+CSFD = CSFDScraper(config.get("csfd_api_url"))
 IMDB = IMDBScraper()
 
 app = FastAPI(title="StreamCinema API")
@@ -91,10 +91,28 @@ def parse_stream_info(filename):
         season = int(match.group(1))
         episode = int(match.group(2))
     else:
-        match = re.search(r"\b(?:epizoda|episode|ep\.?)\s*(\d{1,3})\b", lower, re.I)
+        match = re.search(
+            r"\b(?:serie|série|season)\s*\.?\s*(\d{1,2})\D{0,12}(?:dil|díl|epizoda|episode|ep\.?)\s*\.?\s*(\d{1,3})\b",
+            lower,
+            re.I,
+        )
         if match:
-            season = 1
-            episode = int(match.group(1))
+            season = int(match.group(1))
+            episode = int(match.group(2))
+        else:
+            match = re.search(
+                r"\b(\d{1,2})\D{0,12}(?:serie|série|season)\D{0,12}(\d{1,3})\D{0,6}(?:dil|díl|epizoda|episode|ep\.?)\b",
+                lower,
+                re.I,
+            )
+            if match:
+                season = int(match.group(1))
+                episode = int(match.group(2))
+            else:
+                match = re.search(r"\b(?:epizoda|episode|dil|díl|ep\.?)\s*\.?\s*(\d{1,3})\b", lower, re.I)
+                if match:
+                    season = 1
+                    episode = int(match.group(1))
 
     extension = Path(name).suffix.lower().lstrip(".")
     if not extension:
@@ -132,7 +150,7 @@ def infer_media_type(streams, metadata):
 
 
 def metadata_for_query(query, media_type=None):
-    csfd_data = CSFD.search_movie(query)
+    csfd_data = CSFD.search_movie(query, media_type=media_type)
     if csfd_data:
         return {
             "source": "csfd",
@@ -567,7 +585,7 @@ def render_search_page(result):
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Stream Cinema - výsledky</title>
-        <link rel="stylesheet" href="../static/style.css?v=0.3.0">
+        <link rel="stylesheet" href="../static/style.css?v=0.3.1">
     </head>
     <body>
         <div class="app-shell">

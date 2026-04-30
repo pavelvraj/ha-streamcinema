@@ -2,6 +2,14 @@
 
 This file is intentionally duplicated at the repository root for Home Assistant compatibility. The add-on changelog source is `streamcinema/CHANGELOG.md`.
 
+## 0.3.1
+
+- Search results for TV shows are now grouped into seasons and episodes before saving.
+- Episode parsing better recognizes `S01E02`, `1x02`, `Epizoda 2`, `Díl 2`, and textual season variants.
+- Stream provider badges now use colors distinct from stream status badges.
+- The ČSFD scraper is more robust and can optionally use an external `node-csfd-api` service through `csfd_api_url`.
+- Added documentation for `csfd_api_url` and clarified the official IMDb API status.
+
 ## 0.3.0
 
 - Added deleting a whole movie or TV show collection item, including its streams.

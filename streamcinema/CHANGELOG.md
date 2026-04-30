@@ -2,6 +2,14 @@
 
 Všechny důležité změny add-onu StreamCinema API jsou vedené v tomto souboru.
 
+## 0.3.1
+
+- Výsledky vyhledávání seriálů se nově seskupují do sérií a dílů ještě před uložením do sbírky.
+- Parser dílů lépe rozpoznává zápisy `S01E02`, `1x02`, `Epizoda 2`, `Díl 2` a textové varianty se sérií.
+- Zdroje streamů mají odlišné barvy od badge stavů.
+- ČSFD scraper je robustnější a podporuje volitelnou externí službu `node-csfd-api` přes konfiguraci `csfd_api_url`.
+- Přidána dokumentace k `csfd_api_url` a poznámka k oficiálnímu IMDb API.
+
 ## 0.3.0
 
 - Ve sbírce přidáno smazání celé položky filmu nebo seriálu včetně streamů.
