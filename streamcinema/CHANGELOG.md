@@ -2,6 +2,11 @@
 
 Všechny důležité změny add-onu StreamCinema API jsou vedené v tomto souboru.
 
+## 0.2.6
+
+- Opraveno ukládání vybraných streamů z fallback výsledkové stránky.
+- Fallback stránka už neposílá `POST /media`, ale správně `POST /api/media` relativně přes `media`.
+
 ## 0.2.5
 
 - Opraveno Fastshare vyhledávání podle mobilního API tvaru `process=search&term=...&page=...`.

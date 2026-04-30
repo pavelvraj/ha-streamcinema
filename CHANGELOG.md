@@ -2,6 +2,11 @@
 
 This file is intentionally duplicated at the repository root for Home Assistant compatibility. The add-on changelog source is `streamcinema/CHANGELOG.md`.
 
+## 0.2.6
+
+- Fixed saving selected streams from the fallback search results page.
+- The fallback page no longer posts to `POST /media`; it posts to the correct API route.
+
 ## 0.2.5
 
 - Fixed Fastshare search to use the mobile API shape `process=search&term=...&page=...`.

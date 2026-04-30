@@ -639,10 +639,19 @@ def render_search_page(result):
                     return;
                 }}
                 status("Ukládám vybrané streamy...", "info");
-                fetch("../media", {{
+                fetch("media", {{
                     method: "POST",
                     headers: {{ "Content-Type": "application/json" }},
                     body: JSON.stringify({{ metadata: JSON.parse(document.getElementById("metadataJson").value), streams: streams }})
+                }}).then(function (response) {{
+                    if (response.status === 404) {{
+                        return fetch("/api/media", {{
+                            method: "POST",
+                            headers: {{ "Content-Type": "application/json" }},
+                            body: JSON.stringify({{ metadata: JSON.parse(document.getElementById("metadataJson").value), streams: streams }})
+                        }});
+                    }}
+                    return response;
                 }}).then(function (response) {{
                     if (!response.ok) throw new Error("HTTP " + response.status);
                     return response.json();
