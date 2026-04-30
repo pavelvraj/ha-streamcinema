@@ -374,7 +374,7 @@
                         '<strong>' + escapeHtml(stream.filename) + '</strong>' +
                         '<span class="stream-badges">' + providerBadge(stream.provider) + statusBadge(stream.status) + '</span>' +
                         '<span>' + escapeHtml(stream.format || "-") + ' · ' + formatBytes(stream.size) + ' · ' + (stream.width || "-") + 'x' + (stream.height || "-") + ' · ' + formatDuration(stream.duration) + '</span>' +
-                        '<span>' + (stream.last_checked_at ? "Kontrola " + escapeHtml(stream.last_checked_at) : "Zatim bez kontroly") + '</span>' +
+                        '<span>' + (stream.last_checked_at ? "Kontrola " + escapeHtml(stream.last_checked_at) : "Zatím bez kontroly") + '</span>' +
                     '</div>' +
                     '<div class="row-actions">' +
                         '<button type="button" data-action="check-stream" data-id="' + stream.id + '">Kontrola</button>' +
