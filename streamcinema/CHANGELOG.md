@@ -2,6 +2,12 @@
 
 Všechny důležité změny add-onu StreamCinema API jsou vedené v tomto souboru.
 
+## 0.3.11
+
+- Výsledky vyhledávání seriálů jsou znovu rozdělené podle sérií a dílů.
+- Každý díl má vlastní tabulku streamů se stejným řazením a filtrováním jako filmové výsledky.
+- Filtry v tabulkách seriálu zůstávají společné, takže lze jedním výběrem vyřadit formát nebo velikost napříč všemi díly.
+
 ## 0.3.10
 
 - Část `Upravit položku` ve sbírce je nově ve výchozím stavu schovaná.

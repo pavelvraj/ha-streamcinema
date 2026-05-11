@@ -2,6 +2,12 @@
 
 This file is intentionally duplicated at the repository root for Home Assistant compatibility. The add-on changelog source is `streamcinema/CHANGELOG.md`.
 
+## 0.3.11
+
+- TV show search results are grouped by seasons and episodes again.
+- Each episode has its own sortable and filterable stream table.
+- TV show table filters remain shared, so one format or size filter can narrow streams across all episodes.
+
 ## 0.3.10
 
 - The collection detail edit section is hidden by default.

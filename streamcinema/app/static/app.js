@@ -179,14 +179,15 @@
         var maxSize = parseSizeFilter(searchFilters.maxSize);
 
         for (var i = 0; i < streams.length; i += 1) {
-            var stream = streams[i];
+            var entry = streams[i] && streams[i].stream ? streams[i] : { stream: streams[i], index: i };
+            var stream = entry.stream;
             var size = Number(stream.size || 0);
             if (searchFilters.provider && stream.provider !== searchFilters.provider) continue;
             if (searchFilters.format && String(stream.format || "") !== searchFilters.format) continue;
             if (text && normalizeText(stream.filename).indexOf(text) < 0) continue;
             if (minSize && size < minSize) continue;
             if (maxSize && size > maxSize) continue;
-            entries.push({ stream: stream, index: i });
+            entries.push(entry);
         }
 
         entries.sort(function (a, b) {
@@ -356,19 +357,77 @@
                 '<label><input type="checkbox" id="selectAllStreams"> Vybrat vše</label>' +
                 '<button type="button" data-action="save-selected">Zařadit vybrané do sbírky</button>' +
             '</div>' +
-            renderSearchStreams(streams);
+            renderSearchStreams(metadata.type, streams);
 
         panel.classList.remove("hidden");
     }
 
-    function renderSearchStreams(streams) {
+    function renderSearchStreams(mediaType, streams) {
         if (!streams.length) {
             return '<div class="empty-list">Nebyly nalezeny žádné streamy.</div>';
         }
 
-        var formats = uniqueStreamValues(streams, "format");
-        var providers = uniqueStreamValues(streams, "provider");
-        var entries = filteredSearchEntries(streams);
+        if (mediaType === "tvshow") {
+            return renderSearchSeriesTables(streams);
+        }
+
+        return renderSearchStreamTable(streams, "");
+    }
+
+    function renderSearchSeriesTables(streams) {
+        var grouped = {};
+        var loose = [];
+        var seasons;
+        var html = '<h3>Série a díly</h3><div class="seasons search-seasons">';
+
+        for (var i = 0; i < streams.length; i += 1) {
+            var stream = streams[i];
+            if (stream.season && stream.episode) {
+                if (!grouped[stream.season]) grouped[stream.season] = {};
+                if (!grouped[stream.season][stream.episode]) grouped[stream.season][stream.episode] = [];
+                grouped[stream.season][stream.episode].push({ stream: stream, index: i });
+            } else {
+                loose.push({ stream: stream, index: i });
+            }
+        }
+
+        seasons = Object.keys(grouped).sort(function (a, b) { return Number(a) - Number(b); });
+        if (!seasons.length) {
+            return '<h3>Neroztříděné streamy</h3>' + renderSearchStreamTable(streams, "loose");
+        }
+
+        for (var s = 0; s < seasons.length; s += 1) {
+            var season = seasons[s];
+            var episodes = Object.keys(grouped[season]).sort(function (a, b) { return Number(a) - Number(b); });
+            html += '<details open><summary>Série ' + escapeHtml(season) + '</summary>';
+            for (var e = 0; e < episodes.length; e += 1) {
+                var episode = episodes[e];
+                html += '<div class="episode-block"><h4>Díl ' + escapeHtml(episode) + '</h4>' +
+                    renderSearchStreamTable(grouped[season][episode], "s" + season + "e" + episode) +
+                    '</div>';
+            }
+            html += '</details>';
+        }
+        html += '</div>';
+        if (loose.length) {
+            html += '<h3>Neroztříděné streamy</h3>' + renderSearchStreamTable(loose, "loose");
+        }
+        return html;
+    }
+
+    function renderSearchStreamTable(streams, scope) {
+        var normalizedEntries = streams.map(function (entry, position) {
+            if (entry && entry.stream) return entry;
+            return { stream: entry, index: position };
+        });
+        var scopeSuffix = scope ? "-" + scope : "";
+        var streamValues = normalizedEntries.map(function (entry) { return entry.stream; });
+        var originalCount = normalizedEntries.length;
+        var formats = uniqueStreamValues(streamValues, "format");
+        var providers = uniqueStreamValues(streamValues, "provider");
+        var entries = filteredSearchEntries(normalizedEntries);
+        var filterAttrs = scope ? ' data-filter-scope="' + escapeHtml(scope) + '"' : "";
+
         var html = '<div class="search-table-wrap"><table class="search-results-table">';
         html += '<thead>';
         html += '<tr>' +
@@ -383,17 +442,17 @@
             '</tr>';
         html += '<tr class="filter-row">' +
             '<th></th>' +
-            '<th><select id="searchFilterProvider" data-search-filter="provider"><option value="">Vše</option>' + providers.map(function (provider) {
+            '<th><select id="searchFilterProvider' + scopeSuffix + '" data-search-filter="provider"' + filterAttrs + '><option value="">Vše</option>' + providers.map(function (provider) {
                 return '<option value="' + escapeHtml(provider) + '"' + (searchFilters.provider === provider ? " selected" : "") + '>' + escapeHtml(provider) + '</option>';
             }).join("") + '</select></th>' +
-            '<th><input id="searchFilterText" data-search-filter="text" value="' + escapeHtml(searchFilters.text) + '" placeholder="Filtrovat název"></th>' +
-            '<th><select id="searchFilterFormat" data-search-filter="format"><option value="">Vše</option>' + formats.map(function (format) {
+            '<th><input id="searchFilterText' + scopeSuffix + '" data-search-filter="text"' + filterAttrs + ' value="' + escapeHtml(searchFilters.text) + '" placeholder="Filtrovat název"></th>' +
+            '<th><select id="searchFilterFormat' + scopeSuffix + '" data-search-filter="format"' + filterAttrs + '><option value="">Vše</option>' + formats.map(function (format) {
                 return '<option value="' + escapeHtml(format) + '"' + (searchFilters.format === format ? " selected" : "") + '>' + escapeHtml(format) + '</option>';
             }).join("") + '</select></th>' +
-            '<th><div class="size-filter"><input id="searchFilterMinSize" data-search-filter="minSize" value="' + escapeHtml(searchFilters.minSize) + '" placeholder="min GB"><input id="searchFilterMaxSize" data-search-filter="maxSize" value="' + escapeHtml(searchFilters.maxSize) + '" placeholder="max GB"></div></th>' +
+            '<th><div class="size-filter"><input id="searchFilterMinSize' + scopeSuffix + '" data-search-filter="minSize"' + filterAttrs + ' value="' + escapeHtml(searchFilters.minSize) + '" placeholder="min GB"><input id="searchFilterMaxSize' + scopeSuffix + '" data-search-filter="maxSize"' + filterAttrs + ' value="' + escapeHtml(searchFilters.maxSize) + '" placeholder="max GB"></div></th>' +
             '<th></th>' +
             '<th></th>' +
-            '<th><span class="result-count">' + entries.length + "/" + streams.length + '</span></th>' +
+            '<th><span class="result-count">' + entries.length + "/" + originalCount + '</span></th>' +
             '</tr>';
         html += '</thead><tbody>';
         if (!entries.length) {
@@ -857,12 +916,13 @@
         renderSearchResults();
     }
 
-    function refreshSearchAfterFilter(inputId) {
-        var node = el(inputId);
+    function refreshSearchAfterFilter(inputId, scope) {
+        var selector = scope ? '[data-filter-scope="' + scope + '"]' : "";
+        var node = scope ? document.querySelector("#" + inputId + selector) : el(inputId);
         var start = node && typeof node.selectionStart === "number" ? node.selectionStart : null;
         var end = node && typeof node.selectionEnd === "number" ? node.selectionEnd : null;
         renderSearchResults();
-        node = el(inputId);
+        node = scope ? document.querySelector("#" + inputId + selector) : el(inputId);
         if (!node) return;
         node.focus();
         if (start !== null && node.setSelectionRange) {
@@ -943,13 +1003,13 @@
             }
             if (event.target && event.target.getAttribute && event.target.getAttribute("data-search-filter")) {
                 updateSearchFilter(event.target.id, event.target.getAttribute("data-search-filter"));
-                refreshSearchAfterFilter(event.target.id);
+                refreshSearchAfterFilter(event.target.id, event.target.getAttribute("data-filter-scope"));
             }
         });
         document.addEventListener("input", function (event) {
             if (event.target && event.target.getAttribute && event.target.getAttribute("data-search-filter")) {
                 updateSearchFilter(event.target.id, event.target.getAttribute("data-search-filter"));
-                refreshSearchAfterFilter(event.target.id);
+                refreshSearchAfterFilter(event.target.id, event.target.getAttribute("data-filter-scope"));
             }
         });
 
