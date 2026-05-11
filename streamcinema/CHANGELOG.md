@@ -2,6 +2,13 @@
 
 Všechny důležité změny add-onu StreamCinema API jsou vedené v tomto souboru.
 
+## 0.3.5
+
+- Fastshare vyhledávání nyní používá stejný `api_kodi.php` endpoint jako oficiální KODI plugin.
+- Primární Fastshare dotaz posílá `process=search`, `pagination=200`, `term` a `adult=0`.
+- Původní Fastshare API varianta zůstává jako fallback pro případ změny endpointu.
+- Aktualizován popisek add-onu pro Home Assistant repozitář.
+
 ## 0.3.4
 
 - U každého streamu přidáno tlačítko `Přehrát`.

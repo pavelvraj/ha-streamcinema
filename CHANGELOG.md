@@ -2,6 +2,13 @@
 
 This file is intentionally duplicated at the repository root for Home Assistant compatibility. The add-on changelog source is `streamcinema/CHANGELOG.md`.
 
+## 0.3.5
+
+- Fastshare search now uses the same `api_kodi.php` endpoint as the official KODI plugin.
+- The primary Fastshare request sends `process=search`, `pagination=200`, `term`, and `adult=0`.
+- The previous Fastshare API shape remains as a fallback in case the endpoint changes.
+- Updated the Home Assistant add-on description.
+
 ## 0.3.4
 
 - Added a `Přehrát` button to each stream.

@@ -8,6 +8,8 @@ from bs4 import BeautifulSoup
 
 class FastshareScraper:
     API_URLS = [
+        "https://fastshare.cz/api/api_kodi.php",
+        "https://fastshare.cloud/api/api_kodi.php",
         "https://fastshare.cloud/api/api_json2.php",
         "https://fastshare.cz/api/api_json2.php",
     ]
@@ -150,19 +152,24 @@ class FastshareScraper:
         seen = set()
         last_error = None
         for api_url in self.API_URLS:
-            for page in range(1, 6):
-                params = {"process": "search", "term": query, "page": page}
+            params_candidates = [
+                # Official Kodi addon request shape.
+                {"process": "search", "pagination": 200, "term": query, "adult": 0},
+                # Backward-compatible mobile/api_json2 variant.
+                {"process": "search", "term": query, "page": 1},
+            ]
+            for params in params_candidates:
                 try:
                     response = self.session.get(api_url, params=params, timeout=10)
                     response.raise_for_status()
                     page_results = self._parse_api_response(response.json())
-                    if not page_results:
-                        break
                     for item in page_results:
                         if item["ident"] in seen:
                             continue
                         results.append(item)
                         seen.add(item["ident"])
+                    if page_results:
+                        break
                 except Exception as exc:
                     last_error = exc
                     break
