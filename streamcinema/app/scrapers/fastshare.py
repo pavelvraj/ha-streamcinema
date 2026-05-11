@@ -214,7 +214,14 @@ class FastshareScraper:
                 or item.get("filesize")
                 or item.get("bytes")
                 or item.get("s")
+                or self._nested_value(item.get("data"))
                 or 0
+            )
+            duration = (
+                item.get("duration_seconds")
+                or item.get("duration")
+                or item.get("length")
+                or self._nested_value(item.get("duration"))
             )
             if not ident or not name:
                 continue
@@ -225,6 +232,7 @@ class FastshareScraper:
                     "ident": str(ident),
                     "name": str(name),
                     "size": self._parse_size(size),
+                    "duration": self._parse_int(duration),
                 }
             )
 
@@ -353,12 +361,16 @@ class FastshareScraper:
         return any(ext in lower for ext in extensions)
 
     def _parse_size(self, value):
+        value = self._nested_value(value)
         if isinstance(value, int):
             return value
         if isinstance(value, float):
             return int(value)
 
-        text = str(value).replace(",", ".")
+        text = str(value).strip().replace(",", ".")
+        if re.fullmatch(r"\d+(?:\.\d+)?", text):
+            return int(float(text))
+
         match = re.search(r"(\d+(?:\.\d+)?)\s*(kb|mb|gb|tb|b)", text, re.I)
         if not match:
             return 0
@@ -373,6 +385,18 @@ class FastshareScraper:
             "tb": 1024**4,
         }
         return int(amount * multipliers[unit])
+
+    def _nested_value(self, value):
+        if isinstance(value, dict):
+            return value.get("value") or value.get("size") or value.get("bytes")
+        return value
+
+    def _parse_int(self, value):
+        value = self._nested_value(value)
+        try:
+            return int(float(value))
+        except (TypeError, ValueError):
+            return None
 
     def get_link(self, ident):
         if not self.logged_in and not self.login():

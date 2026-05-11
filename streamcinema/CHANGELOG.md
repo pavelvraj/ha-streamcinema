@@ -2,6 +2,13 @@
 
 Všechny důležité změny add-onu StreamCinema API jsou vedené v tomto souboru.
 
+## 0.3.8
+
+- Opravena velikost souborů u Fastshare výsledků.
+- Fastshare parser nyní čte vnořený tvar `data.value` z Kodi API odpovědi.
+- Číselné velikosti vrácené jako text se berou jako bajty a v GUI se správně zobrazí jako MB/GB.
+- Ze stejného vnořeného tvaru se doplňuje také délka videa.
+
 ## 0.3.7
 
 - ČSFD metadata nově používají fallback přes otevřené CZDB API, protože přímé HTML ČSFD dnes vrací anti-bot stránku.

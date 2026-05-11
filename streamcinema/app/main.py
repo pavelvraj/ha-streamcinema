@@ -609,7 +609,7 @@ def render_search_page(result):
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Stream Cinema - výsledky</title>
-        <link rel="stylesheet" href="../static/style.css?v=0.3.7">
+        <link rel="stylesheet" href="../static/style.css?v=0.3.8">
     </head>
     <body>
         <div class="app-shell">

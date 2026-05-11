@@ -2,6 +2,13 @@
 
 This file is intentionally duplicated at the repository root for Home Assistant compatibility. The add-on changelog source is `streamcinema/CHANGELOG.md`.
 
+## 0.3.8
+
+- Fixed file sizes for Fastshare search results.
+- The Fastshare parser now reads the nested `data.value` shape from the Kodi API response.
+- Numeric sizes returned as strings are treated as bytes and display correctly as MB/GB in the GUI.
+- Video duration is also populated from the same nested API shape.
+
 ## 0.3.7
 
 - ČSFD metadata now use the open CZDB API as a fallback because direct ČSFD HTML currently returns an anti-bot page.
