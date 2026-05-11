@@ -9,6 +9,7 @@ from bs4 import BeautifulSoup
 
 class IMDBScraper:
     BASE_URL = "https://www.imdb.com"
+    CZDB_URL = "https://api.czdb.cz/search"
     HEADERS = {
         "Accept-Language": "cs-CZ,cs;q=0.9,en-US;q=0.8,en;q=0.7",
         "User-Agent": (
@@ -71,6 +72,7 @@ class IMDBScraper:
                 continue
 
             item_type = item.get("q") or ""
+            item_qid = item.get("qid") or ""
             candidate = {
                 "source": "imdb",
                 "imdb_id": imdb_id,
@@ -81,7 +83,7 @@ class IMDBScraper:
                 "poster": item.get("i", {}).get("imageUrl", "") if isinstance(item.get("i"), dict) else "",
                 "plot": item_type,
                 "genres": [],
-                "type": "tvshow" if "TV" in item_type else "movie",
+                "type": "tvshow" if "TV" in item_type or item_qid == "tvSeries" else "movie",
             }
 
             if media_type and candidate["type"] == media_type:
@@ -101,10 +103,16 @@ class IMDBScraper:
                 timeout=10,
             )
             response.raise_for_status()
+            if self._is_waf_challenge(response.text):
+                return self._czdb_by_imdb(imdb_id)
+
             soup = BeautifulSoup(response.content, "lxml")
             data = self._json_ld(soup)
 
             title = data.get("name") or self._text(soup.select_one("h1"))
+            if not title:
+                return self._czdb_by_imdb(imdb_id)
+
             year = self._year(data, soup)
             rating = self._rating(data, soup)
             poster = data.get("image") or ""
@@ -128,7 +136,79 @@ class IMDBScraper:
             }
         except Exception as exc:
             print(f"IMDB Detail Error: {exc}")
+            return self._czdb_by_imdb(imdb_id)
+
+    def _czdb_by_imdb(self, imdb_id):
+        try:
+            response = requests.get(self.CZDB_URL, params={"i": imdb_id}, timeout=12)
+            response.raise_for_status()
+            data = response.json()
+            results = data.get("results") if isinstance(data, dict) else []
+            if not results:
+                return None
+
+            item = self._best_czdb_imdb_result(results, imdb_id)
+            title = self._clean_czdb_value(item.get("nazev"))
+            original_title = self._clean_czdb_value(item.get("original"))
+            if not title:
+                return None
+
+            poster = self._clean_czdb_value(item.get("obrazek_url")) or self._clean_czdb_value(item.get("imgo"))
+            fanart = self._clean_czdb_value(item.get("backgrop")) or poster
+            genres = [
+                genre.strip()
+                for genre in str(item.get("zanr") or "").split(",")
+                if genre.strip() and genre.strip() != "N/A"
+            ]
+            rating = 0.0
+            match = re.search(r"(\d+(?:[.,]\d+)?)", str(item.get("hodnoceni") or ""))
+            if match:
+                rating = float(match.group(1).replace(",", "."))
+
+            return {
+                "source": "imdb",
+                "imdb_id": imdb_id,
+                "csfd_id": str(item.get("csfd_id")) if item.get("csfd_id") else None,
+                "title": title,
+                "original_title": original_title,
+                "year": self._safe_int(item.get("rok")),
+                "rating": rating,
+                "poster": poster,
+                "fanart": fanart,
+                "plot": self._clean_czdb_value(item.get("plot")),
+                "genres": genres,
+                "type": "tvshow" if self._looks_like_series(item) else "movie",
+            }
+        except Exception as exc:
+            print(f"IMDB CZDB Detail Error: {exc}")
             return None
+
+    def _best_czdb_imdb_result(self, results, imdb_id):
+        exact = [item for item in results if str(item.get("imdb_id") or "") == imdb_id]
+        candidates = exact or results
+        with_plot = [item for item in candidates if self._clean_czdb_value(item.get("plot"))]
+        return (with_plot or candidates)[0]
+
+    def _clean_czdb_value(self, value):
+        text = str(value or "").strip()
+        return "" if text in ("", "@", "0", "N/A", "None") else text
+
+    def _looks_like_series(self, item):
+        text = " ".join(
+            str(item.get(key) or "")
+            for key in ("typ", "nazev", "original", "alt_nazev")
+        ).lower()
+        return "seri" in text or "series" in text or "tv" in text
+
+    def _safe_int(self, value):
+        try:
+            return int(value or 0)
+        except (TypeError, ValueError):
+            return 0
+
+    def _is_waf_challenge(self, text):
+        lower = str(text or "").lower()
+        return "awswaf" in lower or "challenge.js" in lower or "captcha" in lower
 
     def _json_ld(self, soup):
         for node in soup.select("script[type='application/ld+json']"):

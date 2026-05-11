@@ -2,6 +2,13 @@
 
 This file is intentionally duplicated at the repository root for Home Assistant compatibility. The add-on changelog source is `streamcinema/CHANGELOG.md`.
 
+## 0.3.7
+
+- ČSFD metadata now use the open CZDB API as a fallback because direct ČSFD HTML currently returns an anti-bot page.
+- The ČSFD fallback fills title, original title, year, rating, poster, fanart, plot, genres, and IMDb ID when available.
+- IMDb no longer returns empty metadata during an AWS WAF challenge and falls back to working suggestion data.
+- IMDb details try to enrich metadata through CZDB by IMDb ID.
+
 ## 0.3.6
 
 - Search now always merges results from both Webshare and Fastshare.

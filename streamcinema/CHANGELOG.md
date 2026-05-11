@@ -2,6 +2,13 @@
 
 Všechny důležité změny add-onu StreamCinema API jsou vedené v tomto souboru.
 
+## 0.3.7
+
+- ČSFD metadata nově používají fallback přes otevřené CZDB API, protože přímé HTML ČSFD dnes vrací anti-bot stránku.
+- ČSFD fallback doplňuje název, původní název, rok, hodnocení, plakát, fanart, popis, žánry a IMDb ID, pokud je dostupné.
+- IMDb scraper už nevrací prázdná metadata při AWS WAF challenge a místo toho použije funkční suggestion data.
+- IMDb detail se pokusí doplnit metadata přes CZDB podle IMDb ID.
+
 ## 0.3.6
 
 - Vyhledávání nyní vždy sloučí výsledky z Webshare i Fastshare.

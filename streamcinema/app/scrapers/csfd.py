@@ -1,4 +1,5 @@
 import re
+import unicodedata
 from urllib.parse import quote
 from urllib.parse import urljoin
 
@@ -8,6 +9,7 @@ from bs4 import BeautifulSoup
 
 class CSFDScraper:
     BASE_URL = "https://www.csfd.cz"
+    CZDB_URL = "https://api.czdb.cz/search"
     HEADERS = {
         "User-Agent": (
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -26,6 +28,10 @@ class CSFDScraper:
         api_result = self._search_api(query, media_type)
         if api_result:
             return api_result
+
+        czdb_result = self._search_czdb(query, media_type)
+        if czdb_result:
+            return czdb_result
 
         try:
             response = self.session.get(
@@ -56,6 +62,10 @@ class CSFDScraper:
         api_result = self._movie_api(csfd_id, media_type=media_type)
         if api_result:
             return api_result
+
+        czdb_result = self._movie_czdb(csfd_id, media_type=media_type)
+        if czdb_result:
+            return czdb_result
 
         try:
             response = self.session.get(
@@ -117,6 +127,138 @@ class CSFDScraper:
         except Exception as exc:
             print(f"CSFD API Detail Error: {exc}")
             return None
+
+    def _search_czdb(self, query, media_type=None):
+        try:
+            response = self.session.get(self.CZDB_URL, params={"q": query}, timeout=12)
+            response.raise_for_status()
+            candidate = self._best_czdb_search_result(response.json(), query, media_type)
+            if not candidate:
+                return None
+            csfd_id = candidate.get("csfd_id")
+            if csfd_id:
+                details = self._movie_czdb(csfd_id, media_type=media_type)
+                if details:
+                    return details
+            return self._normalize_czdb_movie(candidate, media_type)
+        except Exception as exc:
+            print(f"CSFD CZDB Search Error: {exc}")
+            return None
+
+    def _movie_czdb(self, csfd_id, media_type=None):
+        try:
+            response = self.session.get(self.CZDB_URL, params={"uid": csfd_id}, timeout=12)
+            response.raise_for_status()
+            results = self._czdb_results(response.json())
+            return self._normalize_czdb_movie(results[0], media_type) if results else None
+        except Exception as exc:
+            print(f"CSFD CZDB Detail Error: {exc}")
+            return None
+
+    def _czdb_results(self, data):
+        if isinstance(data, dict):
+            results = data.get("results") or []
+            return results if isinstance(results, list) else []
+        if isinstance(data, list):
+            return data
+        return []
+
+    def _best_czdb_search_result(self, data, query, media_type=None):
+        candidates = [item for item in self._czdb_results(data) if isinstance(item, dict)]
+        if not candidates:
+            return None
+
+        normalized_query = self._normalize_match_text(query)
+        query_terms = [
+            self._normalize_match_text(term)
+            for term in re.split(r"\s+", str(query or "").strip())
+            if self._normalize_match_text(term)
+        ]
+
+        def score(item):
+            weighted_names = [
+                (str(item.get("nazev") or ""), 140),
+                (str(item.get("original") or ""), 120),
+                (str(item.get("alt_nazev") or ""), 70),
+            ]
+            value = 0
+            for name, weight in weighted_names:
+                if not name or name == "@":
+                    continue
+                normalized_name = self._normalize_match_text(name)
+                if normalized_name == normalized_query:
+                    value = max(value, weight)
+                elif normalized_name.startswith(normalized_query):
+                    value = max(value, weight - 40)
+                elif query_terms and all(term in normalized_name for term in query_terms):
+                    value = max(value, weight - 70)
+            if media_type == "tvshow" and self._looks_like_series(item):
+                value += 15
+            if media_type == "movie" and not self._looks_like_series(item):
+                value += 10
+            return value
+
+        def tie_breaker(item):
+            year = self._safe_int(item.get("rok"))
+            return -year if media_type == "movie" and len(query_terms) > 1 else 0
+
+        best = max(
+            enumerate(candidates),
+            key=lambda pair: (score(pair[1]), tie_breaker(pair[1]), -pair[0]),
+        )[1]
+        return best if score(best) > 0 else candidates[0]
+
+    def _normalize_czdb_movie(self, data, media_type=None):
+        if not isinstance(data, dict):
+            return None
+
+        title = self._clean_czdb_value(data.get("nazev"))
+        original_title = self._clean_czdb_value(data.get("original"))
+        if not title:
+            return None
+
+        poster = self._clean_czdb_value(data.get("obrazek_url")) or self._clean_czdb_value(data.get("imgo"))
+        fanart = self._clean_czdb_value(data.get("backgrop")) or poster
+        genres = [
+            genre.strip()
+            for genre in str(data.get("zanr") or "").split(",")
+            if genre.strip() and genre.strip() != "N/A"
+        ]
+
+        rating = 0.0
+        match = re.search(r"(\d+(?:[.,]\d+)?)", str(data.get("hodnoceni") or ""))
+        if match:
+            rating = float(match.group(1).replace(",", "."))
+
+        return {
+            "csfd_id": str(data.get("csfd_id")) if data.get("csfd_id") else None,
+            "imdb_id": self._clean_czdb_value(data.get("imdb_id")),
+            "title": title,
+            "original_title": original_title,
+            "year": self._safe_int(data.get("rok")),
+            "rating": rating,
+            "poster": poster,
+            "fanart": fanart,
+            "plot": self._clean_czdb_value(data.get("plot")),
+            "genres": genres,
+            "type": media_type or ("tvshow" if self._looks_like_series(data) else "movie"),
+        }
+
+    def _clean_czdb_value(self, value):
+        text = str(value or "").strip()
+        return "" if text in ("", "@", "0", "N/A", "None") else text
+
+    def _looks_like_series(self, item):
+        text = " ".join(
+            str(item.get(key) or "")
+            for key in ("typ", "nazev", "original", "alt_nazev")
+        ).lower()
+        return "seri" in text or "series" in text or "tv" in text
+
+    def _normalize_match_text(self, value):
+        text = unicodedata.normalize("NFKD", str(value or "").lower())
+        text = "".join(ch for ch in text if not unicodedata.combining(ch))
+        return re.sub(r"[^a-z0-9]+", "", text)
 
     def _best_api_search_result(self, data, media_type=None):
         if isinstance(data, list):
