@@ -5,7 +5,7 @@ import re
 import unicodedata
 from datetime import datetime
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import unquote, urlparse
 
 import requests
 from fastapi import Body, FastAPI, HTTPException
@@ -616,7 +616,7 @@ def render_search_page(result):
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Stream Cinema - výsledky</title>
-        <link rel="stylesheet" href="../static/style.css?v=0.3.12">
+        <link rel="stylesheet" href="../static/style.css?v=0.3.13">
     </head>
     <body>
         <div class="app-shell">
@@ -1062,6 +1062,7 @@ def popular_media(collection: str):
 @app.get("/api/file_link/{ident:path}")
 def get_file_link(ident: str):
     try:
+        ident = unquote(ident or "")
         provider, file_id = ident.split(":", 1)
         if provider == "webshare":
             link = WS.get_link(file_id)
@@ -1097,6 +1098,7 @@ def is_fastshare_url(url):
 @app.get("/api/stream_proxy/{ident:path}")
 def stream_proxy(ident: str, request: Request, url: str = ""):
     try:
+        ident = unquote(ident or "")
         provider, file_id = ident.split(":", 1)
         if provider != "fastshare":
             raise HTTPException(status_code=404, detail="Unsupported provider")

@@ -672,7 +672,10 @@
         }
 
         showStatus("Získávám stream link...", "info");
-        requestJson(API_URL + "/file_link/" + encodeURIComponent(ident))
+        var parts = ident.split(":");
+        var provider = parts.shift();
+        var fileIdent = parts.join(":");
+        requestJson(API_URL + "/file_link/" + encodeURIComponent(provider) + ":" + encodeURIComponent(fileIdent))
             .then(function (data) {
                 if (!data.link) {
                     showStatus("Provider nevrátil přímý stream link.", "error");

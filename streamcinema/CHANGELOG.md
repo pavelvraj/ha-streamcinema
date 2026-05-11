@@ -2,6 +2,12 @@
 
 Všechny důležité změny add-onu StreamCinema API jsou vedené v tomto souboru.
 
+## 0.3.13
+
+- Opraveno obecné přehrávání streamů z GUI pro Webshare i Fastshare.
+- Frontend už nekóduje oddělovač providera v identifikátoru streamu, takže `/api/file_link/...` znovu správně rozpozná zdroj.
+- Backend zároveň tolerantně dekóduje starší zakódovaný tvar identifikátoru.
+
 ## 0.3.12
 
 - Opraveno přehrávání filmů z Fastshare ve vestavěném přehrávači.

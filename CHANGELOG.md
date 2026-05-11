@@ -2,6 +2,12 @@
 
 This file is intentionally duplicated at the repository root for Home Assistant compatibility. The add-on changelog source is `streamcinema/CHANGELOG.md`.
 
+## 0.3.13
+
+- Fixed general stream playback from the GUI for both Webshare and Fastshare.
+- The frontend no longer encodes the provider separator in stream identifiers, so `/api/file_link/...` can resolve the provider again.
+- The backend also tolerantly decodes older encoded stream identifier paths.
+
 ## 0.3.12
 
 - Fixed movie playback from Fastshare in the embedded player.
