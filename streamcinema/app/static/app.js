@@ -490,11 +490,12 @@
                     '</div>' +
                     '<p class="plot">' + escapeHtml(item.plot || "Bez popisu.") + '</p>' +
                     '<div class="detail-actions">' +
+                        '<button type="button" id="editMediaButton" data-action="open-media-edit">Upravit položku</button>' +
                         '<button type="button" class="danger" data-action="delete-media" data-id="' + escapeHtml(item._id) + '">Smazat položku</button>' +
                     '</div>' +
                 '</div>' +
             '</div>' +
-            '<section class="edit-form">' +
+            '<section id="mediaEditForm" class="edit-form hidden">' +
                 '<h3>Upravit položku</h3>' +
                 '<div class="edit-grid">' +
                     '<label>Typ' + renderSegmentedInput("editType", isTvshow ? "tvshow" : "movie", [{ value: "movie", label: "Film" }, { value: "tvshow", label: "Seriál" }]) + '</label>' +
@@ -503,10 +504,28 @@
                     '<label>Vlastní obrázek<input id="editPosterFile" type="file" accept="image/*"></label>' +
                 '</div>' +
                 '<label>Popis<textarea id="editPlot" rows="5">' + escapeHtml(item.plot || "") + '</textarea></label>' +
-                '<button type="button" data-action="save-media" data-id="' + escapeHtml(item._id) + '">Uložit změny</button>' +
+                '<div class="edit-actions">' +
+                    '<button type="button" data-action="save-media" data-id="' + escapeHtml(item._id) + '">Uložit změny</button>' +
+                    '<button type="button" data-action="cancel-media-edit" data-id="' + escapeHtml(item._id) + '">Storno</button>' +
+                '</div>' +
             '</section>' +
             renderStreamBulkActions(item) +
             (item.type === "tvshow" ? renderSeasons(item) : renderStreams(item.streams || []));
+    }
+
+    function openMediaEditForm() {
+        var form = el("mediaEditForm");
+        var button = el("editMediaButton");
+        if (form) form.classList.remove("hidden");
+        if (button) button.classList.add("hidden");
+    }
+
+    function cancelMediaEdit(mediaId) {
+        var form = el("mediaEditForm");
+        var button = el("editMediaButton");
+        if (form) form.classList.add("hidden");
+        if (button) button.classList.remove("hidden");
+        if (mediaId) showDetail(mediaId);
     }
 
     function renderStreamBulkActions(item) {
@@ -815,6 +834,8 @@
         if (action === "delete-pending") deletePendingStreams(id);
         if (action === "check-stream") checkStream(id);
         if (action === "delete-stream") deleteStream(id);
+        if (action === "open-media-edit") openMediaEditForm();
+        if (action === "cancel-media-edit") cancelMediaEdit(id || selectedMediaId);
         if (action === "save-media") saveMediaEdits(id);
         if (action === "delete-media") deleteMedia(id);
         if (action === "play-stream") {

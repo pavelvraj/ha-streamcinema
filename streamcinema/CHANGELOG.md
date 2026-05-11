@@ -2,6 +2,12 @@
 
 Všechny důležité změny add-onu StreamCinema API jsou vedené v tomto souboru.
 
+## 0.3.10
+
+- Část `Upravit položku` ve sbírce je nově ve výchozím stavu schovaná.
+- Detail položky zobrazuje tlačítko `Upravit položku`, které otevře editační formulář.
+- Formulář má tlačítka `Uložit změny` a `Storno`; obě po dokončení vrátí detail do základního stavu.
+
 ## 0.3.9
 
 - Výsledky vyhledávání v GUI jsou nově v tabulce místo řádkových karet.

@@ -439,6 +439,13 @@ textarea {
     margin-top: 10px;
 }
 
+.edit-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
 h3 {
     border-top: 1px solid var(--line);
     margin: 18px 0 10px;

@@ -2,6 +2,12 @@
 
 This file is intentionally duplicated at the repository root for Home Assistant compatibility. The add-on changelog source is `streamcinema/CHANGELOG.md`.
 
+## 0.3.10
+
+- The collection detail edit section is hidden by default.
+- Media details now show an `Upravit položku` button that opens the edit form.
+- The edit form has `Uložit změny` and `Storno`; both return the detail view to its default state.
+
 ## 0.3.9
 
 - Search results in the GUI now render as a table instead of row cards.
