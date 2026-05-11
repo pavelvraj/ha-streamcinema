@@ -2,6 +2,13 @@
 
 Všechny důležité změny add-onu StreamCinema API jsou vedené v tomto souboru.
 
+## 0.3.12
+
+- Opraveno přehrávání filmů z Fastshare ve vestavěném přehrávači.
+- Fastshare přihlášení nyní používá Kodi API hash a ukládá cookie `FASTSHARE`.
+- Výsledky Fastshare si ukládají přímý `download_url`, pokud ho API vrátí.
+- Přehrávání Fastshare jde přes backend proxy, která předává cookie a podporuje `Range` požadavky pro načítání a posouvání videa.
+
 ## 0.3.11
 
 - Výsledky vyhledávání seriálů jsou znovu rozdělené podle sérií a dílů.

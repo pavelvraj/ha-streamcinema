@@ -469,7 +469,7 @@
                     '<td class="numeric-cell" data-sort-value="' + Number(stream.size || 0) + '">' + formatBytes(stream.size) + '</td>' +
                     '<td>' + escapeHtml(streamResolution(stream)) + '</td>' +
                     '<td class="numeric-cell">' + formatDuration(stream.duration) + '</td>' +
-                    '<td><button type="button" class="play-button compact-button" data-action="play-stream" data-ident="' + escapeHtml(streamIdent(stream)) + '" data-title="' + escapeHtml(stream.filename) + '">Přehrát</button></td>' +
+                    '<td><button type="button" class="play-button compact-button" data-action="play-stream" data-ident="' + escapeHtml(streamIdent(stream)) + '" data-source-url="' + escapeHtml(stream.stream_url || "") + '" data-title="' + escapeHtml(stream.filename) + '">Přehrát</button></td>' +
                     '</tr>';
             }).join("");
         }
@@ -634,7 +634,7 @@
                         '<span>' + (stream.last_checked_at ? "Kontrola " + escapeHtml(stream.last_checked_at) : "Zatím bez kontroly") + '</span>' +
                     '</div>' +
                     '<div class="row-actions">' +
-                        '<button type="button" class="play-button" data-action="play-stream" data-ident="' + escapeHtml(stream.ident) + '" data-title="' + escapeHtml(stream.filename) + '">Přehrát</button>' +
+                        '<button type="button" class="play-button" data-action="play-stream" data-ident="' + escapeHtml(stream.ident) + '" data-source-url="' + escapeHtml(stream.stream_url || "") + '" data-title="' + escapeHtml(stream.filename) + '">Přehrát</button>' +
                         '<button type="button" data-action="check-stream" data-id="' + stream.id + '">Kontrola</button>' +
                         '<button type="button" class="danger" data-action="delete-stream" data-id="' + stream.id + '">Vyřadit</button>' +
                     '</div>' +
@@ -665,7 +665,7 @@
         return modal;
     }
 
-    function playStream(ident, title) {
+    function playStream(ident, title, sourceUrl) {
         if (!ident || ident.indexOf(":") < 1) {
             showStatus("Stream nemá identifikátor pro přehrání.", "error");
             return;
@@ -677,6 +677,9 @@
                 if (!data.link) {
                     showStatus("Provider nevrátil přímý stream link.", "error");
                     return;
+                }
+                if (sourceUrl && data.link.indexOf("api/stream_proxy/") === 0) {
+                    data.link += "?url=" + encodeURIComponent(sourceUrl);
                 }
                 var modal = ensurePlayerModal();
                 var player = el("streamPlayer");
@@ -899,7 +902,7 @@
         if (action === "delete-media") deleteMedia(id);
         if (action === "play-stream") {
             event.preventDefault();
-            playStream(target.getAttribute("data-ident"), target.getAttribute("data-title"));
+            playStream(target.getAttribute("data-ident"), target.getAttribute("data-title"), target.getAttribute("data-source-url"));
         }
         if (action === "close-player") closePlayer();
         if (action === "fullscreen-player") fullscreenPlayer();

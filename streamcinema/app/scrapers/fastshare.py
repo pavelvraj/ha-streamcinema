@@ -30,10 +30,33 @@ class FastshareScraper:
         self.session = requests.Session()
         self.session.headers.update(self.HEADERS)
         self.logged_in = False
+        self.hash = ""
 
     def login(self):
         if not self.username or not self.password:
             return False
+
+        try:
+            response = self.session.get(
+                "https://fastshare.cz/api/api_kodi.php",
+                params={
+                    "process": "login",
+                    "login": self.username,
+                    "password": self.password,
+                },
+                timeout=10,
+            )
+            response.raise_for_status()
+            data = response.json()
+            user_hash = ((data.get("user") or {}).get("hash") or "").strip()
+            if user_hash:
+                self.hash = user_hash
+                self.session.cookies.set("FASTSHARE", user_hash, domain=".fastshare.cz")
+                self.session.cookies.set("FASTSHARE", user_hash, domain=".fastshare.cloud")
+                self.logged_in = True
+                return True
+        except Exception as exc:
+            print(f"FS API Login Error: {exc}")
 
         for base_url in self.BASE_URLS:
             try:
@@ -233,6 +256,7 @@ class FastshareScraper:
                     "name": str(name),
                     "size": self._parse_size(size),
                     "duration": self._parse_int(duration),
+                    "stream_url": item.get("download_url") or item.get("url") or item.get("link") or "",
                 }
             )
 
@@ -291,6 +315,7 @@ class FastshareScraper:
                     "ident": ident,
                     "name": name,
                     "size": self._parse_size(container_text),
+                    "stream_url": "",
                 }
             )
             seen.add(ident)
@@ -325,6 +350,7 @@ class FastshareScraper:
                 "ident": ident,
                 "name": name,
                 "size": self._parse_size(detail_text),
+                "stream_url": "",
             }
             if resolution:
                 result["width"] = int(resolution.group(1))
@@ -414,3 +440,8 @@ class FastshareScraper:
         except Exception as exc:
             print(f"FS Link Error: {exc}")
             return f"https://fastshare.cloud/free/?lang=cs&u={ident}"
+
+    def stream_headers(self):
+        if self.hash:
+            return {"Cookie": f"FASTSHARE={self.hash}"}
+        return {}

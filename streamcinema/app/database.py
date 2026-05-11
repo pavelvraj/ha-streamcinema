@@ -10,6 +10,7 @@ STREAM_COLUMNS = {
     "status": "TEXT DEFAULT 'active'",
     "format": "TEXT",
     "last_checked_at": "TIMESTAMP",
+    "stream_url": "TEXT",
 }
 
 def get_db_connection():

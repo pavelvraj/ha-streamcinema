@@ -5,9 +5,12 @@ import re
 import unicodedata
 from datetime import datetime
 from pathlib import Path
+from urllib.parse import urlparse
 
+import requests
 from fastapi import Body, FastAPI, HTTPException
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi import Request
+from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.database import get_db_connection, init_db
@@ -257,6 +260,7 @@ def search_provider_streams(query, media_type="movie"):
                     "format": item.get("format") or info["format"],
                     "season": item.get("season") or info["season"],
                     "episode": item.get("episode") or info["episode"],
+                    "stream_url": item.get("stream_url") or "",
                 }
             )
 
@@ -354,8 +358,9 @@ def add_stream(conn, media_id, stream):
         INSERT INTO streams (
             media_id, provider, ident, filename, size, duration, width, height,
             season, episode, status, format, audio, subtitles
+            , stream_url
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?)
         """,
         (
             media_id,
@@ -371,6 +376,7 @@ def add_stream(conn, media_id, stream):
             stream.get("format") or info["format"],
             json_dumps(stream.get("audio") or [{"language": "cze"}]),
             json_dumps(stream.get("subtitles") or []),
+            stream.get("stream_url") or "",
         ),
     )
 
@@ -419,6 +425,7 @@ def serialize_stream_row(row):
         "last_checked_at": s.get("last_checked_at"),
         "audio": safe_json_loads(s.get("audio"), [{"language": "cze"}]),
         "subtitles": safe_json_loads(s.get("subtitles"), []),
+        "stream_url": s.get("stream_url") or "",
     }
 
 
@@ -609,7 +616,7 @@ def render_search_page(result):
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Stream Cinema - výsledky</title>
-        <link rel="stylesheet" href="../static/style.css?v=0.3.11">
+        <link rel="stylesheet" href="../static/style.css?v=0.3.12">
     </head>
     <body>
         <div class="app-shell">
@@ -1059,10 +1066,71 @@ def get_file_link(ident: str):
         if provider == "webshare":
             link = WS.get_link(file_id)
         elif provider == "fastshare":
-            link = FS.get_link(file_id)
+            link = f"api/stream_proxy/{provider}:{file_id}"
         else:
             link = None
         return {"link": link}
     except Exception as exc:
         print(f"Link error: {exc}")
         return {"link": None}
+
+
+def stored_stream_url(provider, file_id):
+    conn = get_db_connection()
+    try:
+        row = conn.execute(
+            "SELECT stream_url FROM streams WHERE provider=? AND ident=? AND stream_url<>'' ORDER BY id DESC LIMIT 1",
+            (provider, file_id),
+        ).fetchone()
+        return row["stream_url"] if row else ""
+    finally:
+        conn.close()
+
+
+def is_fastshare_url(url):
+    parsed = urlparse(url or "")
+    return parsed.scheme in ("http", "https") and (
+        parsed.netloc.endswith("fastshare.cloud") or parsed.netloc.endswith("fastshare.cz")
+    )
+
+
+@app.get("/api/stream_proxy/{ident:path}")
+def stream_proxy(ident: str, request: Request, url: str = ""):
+    try:
+        provider, file_id = ident.split(":", 1)
+        if provider != "fastshare":
+            raise HTTPException(status_code=404, detail="Unsupported provider")
+
+        if not FS.logged_in:
+            FS.login()
+
+        source_url = url if is_fastshare_url(url) else ""
+        source_url = source_url or stored_stream_url(provider, file_id) or FS.get_link(file_id)
+        if not source_url or "/free/" in source_url:
+            raise HTTPException(status_code=404, detail="Stream link unavailable")
+
+        headers = dict(FS.stream_headers())
+        range_header = request.headers.get("range")
+        if range_header:
+            headers["Range"] = range_header
+
+        upstream = requests.get(source_url, headers=headers, stream=True, timeout=15)
+        upstream.raise_for_status()
+
+        response_headers = {}
+        for header in ("content-type", "content-length", "content-range", "accept-ranges"):
+            value = upstream.headers.get(header)
+            if value:
+                response_headers[header] = value
+
+        return StreamingResponse(
+            upstream.iter_content(chunk_size=1024 * 512),
+            status_code=upstream.status_code,
+            headers=response_headers,
+            media_type=upstream.headers.get("content-type") or "application/octet-stream",
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        print(f"Stream proxy error: {exc}")
+        raise HTTPException(status_code=502, detail="Stream proxy failed")

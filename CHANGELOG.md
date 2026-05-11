@@ -2,6 +2,13 @@
 
 This file is intentionally duplicated at the repository root for Home Assistant compatibility. The add-on changelog source is `streamcinema/CHANGELOG.md`.
 
+## 0.3.12
+
+- Fixed movie playback from Fastshare in the embedded player.
+- Fastshare login now uses the Kodi API hash and stores the `FASTSHARE` cookie.
+- Fastshare search results persist the direct `download_url` when the API returns it.
+- Fastshare playback now goes through a backend proxy that forwards the cookie and supports `Range` requests for loading and seeking video.
+
 ## 0.3.11
 
 - TV show search results are grouped by seasons and episodes again.
