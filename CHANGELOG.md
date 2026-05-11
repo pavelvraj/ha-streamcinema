@@ -2,6 +2,13 @@
 
 This file is intentionally duplicated at the repository root for Home Assistant compatibility. The add-on changelog source is `streamcinema/CHANGELOG.md`.
 
+## 0.3.6
+
+- Search now always merges results from both Webshare and Fastshare.
+- Stream results are filtered by every word from the original query.
+- Filtering compares normalized names without dots, spaces, and diacritics, so `Jacks` matches `Percy.Jackson.mkv`.
+- Fastshare no longer stops after the first non-empty result set and collects results from all available Fastshare search methods.
+
 ## 0.3.5
 
 - Fastshare search now uses the same `api_kodi.php` endpoint as the official KODI plugin.

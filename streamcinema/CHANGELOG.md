@@ -2,6 +2,13 @@
 
 Všechny důležité změny add-onu StreamCinema API jsou vedené v tomto souboru.
 
+## 0.3.6
+
+- Vyhledávání nyní vždy sloučí výsledky z Webshare i Fastshare.
+- Výsledky streamů se filtrují podle všech slov v původním zadání.
+- Filtr porovnává normalizovaný název bez teček, mezer a diakritiky, takže například `Jacks` projde přes `Percy.Jackson.mkv`.
+- Fastshare scraper už nekončí po první neprázdné sadě výsledků a sbírá výsledky ze všech dostupných Fastshare metod.
+
 ## 0.3.5
 
 - Fastshare vyhledávání nyní používá stejný `api_kodi.php` endpoint jako oficiální KODI plugin.

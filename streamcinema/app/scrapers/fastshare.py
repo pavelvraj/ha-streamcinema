@@ -62,37 +62,15 @@ class FastshareScraper:
 
         seen = set()
         merged = []
-        for search_query in self._query_variants(query):
-            results = self._search_api(search_query)
-            for item in results:
-                if item["ident"] in seen:
-                    continue
-                merged.append(item)
-                seen.add(item["ident"])
-            if merged:
-                return merged
+        for search_method in (self._search_api, self._search_ajax, self._search_web):
+            for search_query in self._query_variants(query):
+                for item in search_method(search_query):
+                    if item["ident"] in seen:
+                        continue
+                    merged.append(item)
+                    seen.add(item["ident"])
 
-        for search_query in self._query_variants(query):
-            results = self._search_ajax(search_query)
-            for item in results:
-                if item["ident"] in seen:
-                    continue
-                merged.append(item)
-                seen.add(item["ident"])
-            if merged:
-                return merged
-
-        for search_query in self._query_variants(query):
-            results = self._search_web(search_query)
-            for item in results:
-                if item["ident"] in seen:
-                    continue
-                merged.append(item)
-                seen.add(item["ident"])
-            if merged:
-                return merged
-
-        return []
+        return merged
 
     def _query_variants(self, query):
         cleaned = re.sub(r"\s+", " ", query.strip())

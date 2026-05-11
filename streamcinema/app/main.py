@@ -2,6 +2,7 @@ import hashlib
 import json
 import os
 import re
+import unicodedata
 from datetime import datetime
 from pathlib import Path
 
@@ -139,6 +140,26 @@ def parse_stream_info(filename):
     }
 
 
+def normalize_search_text(value):
+    text = unicodedata.normalize("NFKD", str(value or "").lower())
+    text = "".join(ch for ch in text if not unicodedata.combining(ch))
+    return re.sub(r"[^a-z0-9]+", "", text)
+
+
+def query_terms(query):
+    return [
+        normalize_search_text(part)
+        for part in re.split(r"\s+", str(query or "").strip())
+        if normalize_search_text(part)
+    ]
+
+
+def stream_name_matches_query(filename, query):
+    normalized_name = normalize_search_text(filename)
+    terms = query_terms(query)
+    return bool(normalized_name) and all(term in normalized_name for term in terms)
+
+
 def infer_media_type(streams, metadata):
     if metadata.get("type") in ("movie", "tvshow"):
         return metadata["type"]
@@ -217,9 +238,12 @@ def search_provider_streams(query, media_type="movie"):
             ident = item.get("ident")
             if not provider or not ident or (provider, ident) in seen:
                 continue
-            seen.add((provider, ident))
 
             filename = item.get("name") or item.get("filename") or ""
+            if not stream_name_matches_query(filename, query):
+                continue
+
+            seen.add((provider, ident))
             info = parse_stream_info(filename)
             streams.append(
                 {
@@ -585,7 +609,7 @@ def render_search_page(result):
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Stream Cinema - výsledky</title>
-        <link rel="stylesheet" href="../static/style.css?v=0.3.5">
+        <link rel="stylesheet" href="../static/style.css?v=0.3.6">
     </head>
     <body>
         <div class="app-shell">
