@@ -2,6 +2,13 @@
 
 This file is intentionally duplicated at the repository root for Home Assistant compatibility. The add-on changelog source is `streamcinema/CHANGELOG.md`.
 
+## 0.3.9
+
+- Search results in the GUI now render as a table instead of row cards.
+- The table header can sort by provider, filename, format, size, resolution, and duration.
+- Header filters can narrow provider, format, filename text, and minimum or maximum size.
+- Size sorting uses the real byte value, so `12 GB` correctly sorts above `150 MB`.
+
 ## 0.3.8
 
 - Fixed file sizes for Fastshare search results.

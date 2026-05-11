@@ -2,6 +2,13 @@
 
 Všechny důležité změny add-onu StreamCinema API jsou vedené v tomto souboru.
 
+## 0.3.9
+
+- Výsledky vyhledávání v GUI jsou nově v tabulce místo řádkových karet.
+- Záhlaví tabulky umožňuje řadit podle zdroje, názvu, formátu, velikosti, rozlišení a délky.
+- Filtry v záhlaví umožňují omezit zdroj, formát, část názvu a minimální nebo maximální velikost.
+- Řazení podle velikosti používá skutečné bajty, takže například `12 GB` je správně větší než `150 MB`.
+
 ## 0.3.8
 
 - Opravena velikost souborů u Fastshare výsledků.

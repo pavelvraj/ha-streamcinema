@@ -3,6 +3,8 @@
     var catalogItems = [];
     var currentSearch = null;
     var selectedMediaId = null;
+    var searchSort = { key: "size", direction: "desc" };
+    var searchFilters = { provider: "", format: "", text: "", minSize: "", maxSize: "" };
 
     function el(id) {
         return document.getElementById(id);
@@ -115,6 +117,110 @@
         return (stream.provider || "") + ":" + (stream.provider_ident || stream.ident || "");
     }
 
+    function resetSearchTableState() {
+        searchSort = { key: "size", direction: "desc" };
+        searchFilters = { provider: "", format: "", text: "", minSize: "", maxSize: "" };
+    }
+
+    function normalizeText(value) {
+        return String(value || "").toLowerCase();
+    }
+
+    function parseSizeFilter(value) {
+        var text = String(value || "").trim().replace(",", ".");
+        var match;
+        var amount;
+        var unit;
+        if (!text) return 0;
+        match = text.match(/^(\d+(?:\.\d+)?)\s*(b|kb|mb|gb|tb)?$/i);
+        if (!match) return 0;
+        amount = Number(match[1] || 0);
+        unit = String(match[2] || "gb").toLowerCase();
+        if (unit === "tb") return amount * 1024 * 1024 * 1024 * 1024;
+        if (unit === "gb") return amount * 1024 * 1024 * 1024;
+        if (unit === "mb") return amount * 1024 * 1024;
+        if (unit === "kb") return amount * 1024;
+        return amount;
+    }
+
+    function streamResolution(stream) {
+        if (!stream.width && !stream.height) return "-";
+        return (stream.width || "-") + "x" + (stream.height || "-");
+    }
+
+    function uniqueStreamValues(streams, key) {
+        var seen = {};
+        var values = [];
+        for (var i = 0; i < streams.length; i += 1) {
+            var value = String(streams[i][key] || "").trim();
+            if (!value || seen[value]) continue;
+            seen[value] = true;
+            values.push(value);
+        }
+        return values.sort(function (a, b) { return a.localeCompare(b); });
+    }
+
+    function searchSortLabel(key) {
+        if (searchSort.key !== key) return "";
+        return searchSort.direction === "asc" ? " ▲" : " ▼";
+    }
+
+    function searchSortButton(key, label) {
+        if (!label) return "";
+        return '<button type="button" class="sort-button" data-action="sort-search" data-key="' + escapeHtml(key) + '">' +
+            escapeHtml(label + searchSortLabel(key)) +
+            '</button>';
+    }
+
+    function filteredSearchEntries(streams) {
+        var entries = [];
+        var text = normalizeText(searchFilters.text);
+        var minSize = parseSizeFilter(searchFilters.minSize);
+        var maxSize = parseSizeFilter(searchFilters.maxSize);
+
+        for (var i = 0; i < streams.length; i += 1) {
+            var stream = streams[i];
+            var size = Number(stream.size || 0);
+            if (searchFilters.provider && stream.provider !== searchFilters.provider) continue;
+            if (searchFilters.format && String(stream.format || "") !== searchFilters.format) continue;
+            if (text && normalizeText(stream.filename).indexOf(text) < 0) continue;
+            if (minSize && size < minSize) continue;
+            if (maxSize && size > maxSize) continue;
+            entries.push({ stream: stream, index: i });
+        }
+
+        entries.sort(function (a, b) {
+            var av = searchSortValue(a.stream, searchSort.key);
+            var bv = searchSortValue(b.stream, searchSort.key);
+            var result;
+            if (typeof av === "number" || typeof bv === "number") {
+                result = Number(av || 0) - Number(bv || 0);
+            } else {
+                result = String(av || "").localeCompare(String(bv || ""));
+            }
+            return searchSort.direction === "asc" ? result : -result;
+        });
+        return entries;
+    }
+
+    function searchSortValue(stream, key) {
+        if (key === "selected") return 0;
+        if (key === "provider") return stream.provider || "";
+        if (key === "filename") return stream.filename || "";
+        if (key === "format") return stream.format || "";
+        if (key === "size") return Number(stream.size || 0);
+        if (key === "resolution") return Number(stream.width || 0) * Number(stream.height || 0);
+        if (key === "duration") return Number(stream.duration || 0);
+        if (key === "season") return Number(stream.season || 999);
+        if (key === "episode") return Number(stream.episode || 999);
+        return "";
+    }
+
+    function updateSearchFilter(id, key) {
+        var node = el(id);
+        searchFilters[key] = node ? node.value : "";
+    }
+
     function escapeHtml(value) {
         return String(value == null ? "" : value)
             .replace(/&/g, "&amp;")
@@ -211,6 +317,7 @@
 
         requestJson(API_URL + "/search_json?q=" + encodeURIComponent(query) + "&media_type=" + encodeURIComponent(mediaType))
             .then(function (data) {
+                resetSearchTableState();
                 currentSearch = data;
                 renderSearchResults();
                 showStatus("", "info");
@@ -249,72 +356,66 @@
                 '<label><input type="checkbox" id="selectAllStreams"> Vybrat vše</label>' +
                 '<button type="button" data-action="save-selected">Zařadit vybrané do sbírky</button>' +
             '</div>' +
-            renderSearchStreams(metadata.type, streams);
+            renderSearchStreams(streams);
 
         panel.classList.remove("hidden");
     }
 
-    function renderSearchStreams(mediaType, streams) {
-        if (mediaType !== "tvshow") {
-            return '<div class="stream-table">' + renderSearchStreamRows(streams) + '</div>';
-        }
-
-        var grouped = {};
-        var loose = [];
-        for (var i = 0; i < streams.length; i += 1) {
-            var stream = streams[i];
-            if (stream.season && stream.episode) {
-                if (!grouped[stream.season]) grouped[stream.season] = {};
-                if (!grouped[stream.season][stream.episode]) grouped[stream.season][stream.episode] = [];
-                grouped[stream.season][stream.episode].push({ stream: stream, index: i });
-            } else {
-                loose.push({ stream: stream, index: i });
-            }
-        }
-
-        var seasons = Object.keys(grouped).sort(function (a, b) { return Number(a) - Number(b); });
-        if (!seasons.length) {
-            return '<h3>Neroztříděné streamy</h3><div class="stream-table">' + renderSearchStreamRows(streams) + '</div>';
-        }
-
-        var html = '<h3>Série a díly</h3><div class="seasons">';
-        for (var s = 0; s < seasons.length; s += 1) {
-            var season = seasons[s];
-            var episodes = Object.keys(grouped[season]).sort(function (a, b) { return Number(a) - Number(b); });
-            html += '<details open><summary>Série ' + escapeHtml(season) + '</summary>';
-            for (var e = 0; e < episodes.length; e += 1) {
-                var episode = episodes[e];
-                html += '<div class="episode-block"><h4>Díl ' + escapeHtml(episode) + '</h4>' +
-                    '<div class="stream-table">' + renderSearchStreamRows(grouped[season][episode]) + '</div></div>';
-            }
-            html += '</details>';
-        }
-        html += '</div>';
-        if (loose.length) {
-            html += '<h3>Neroztříděné streamy</h3><div class="stream-table">' + renderSearchStreamRows(loose) + '</div>';
-        }
-        return html;
-    }
-
-    function renderSearchStreamRows(streams) {
+    function renderSearchStreams(streams) {
         if (!streams.length) {
             return '<div class="empty-list">Nebyly nalezeny žádné streamy.</div>';
         }
 
-        return streams.map(function (entry, position) {
-            var stream = entry.stream || entry;
-            var index = entry.index != null ? entry.index : position;
-            var season = stream.season && stream.episode ? '<span class="episode-badge">S' + stream.season + ' E' + stream.episode + '</span>' : "";
-            return '' +
-                '<div class="stream-row selectable">' +
-                    '<input type="checkbox" class="search-stream-check" data-index="' + index + '">' +
-                    '<div>' +
-                        '<strong>' + escapeHtml(stream.filename) + '</strong>' +
-                        '<span class="stream-badges">' + providerBadge(stream.provider) + streamMetaLine(stream, false) + season + '</span>' +
-                    '</div>' +
-                    '<button type="button" class="play-button" data-action="play-stream" data-ident="' + escapeHtml(streamIdent(stream)) + '" data-title="' + escapeHtml(stream.filename) + '">Přehrát</button>' +
-                '</div>';
-        }).join("");
+        var formats = uniqueStreamValues(streams, "format");
+        var providers = uniqueStreamValues(streams, "provider");
+        var entries = filteredSearchEntries(streams);
+        var html = '<div class="search-table-wrap"><table class="search-results-table">';
+        html += '<thead>';
+        html += '<tr>' +
+            '<th class="check-col">' + searchSortButton("selected", "") + '</th>' +
+            '<th>' + searchSortButton("provider", "Zdroj") + '</th>' +
+            '<th>' + searchSortButton("filename", "Název") + '</th>' +
+            '<th>' + searchSortButton("format", "Formát") + '</th>' +
+            '<th>' + searchSortButton("size", "Velikost") + '</th>' +
+            '<th>' + searchSortButton("resolution", "Rozlišení") + '</th>' +
+            '<th>' + searchSortButton("duration", "Délka") + '</th>' +
+            '<th>Akce</th>' +
+            '</tr>';
+        html += '<tr class="filter-row">' +
+            '<th></th>' +
+            '<th><select id="searchFilterProvider" data-search-filter="provider"><option value="">Vše</option>' + providers.map(function (provider) {
+                return '<option value="' + escapeHtml(provider) + '"' + (searchFilters.provider === provider ? " selected" : "") + '>' + escapeHtml(provider) + '</option>';
+            }).join("") + '</select></th>' +
+            '<th><input id="searchFilterText" data-search-filter="text" value="' + escapeHtml(searchFilters.text) + '" placeholder="Filtrovat název"></th>' +
+            '<th><select id="searchFilterFormat" data-search-filter="format"><option value="">Vše</option>' + formats.map(function (format) {
+                return '<option value="' + escapeHtml(format) + '"' + (searchFilters.format === format ? " selected" : "") + '>' + escapeHtml(format) + '</option>';
+            }).join("") + '</select></th>' +
+            '<th><div class="size-filter"><input id="searchFilterMinSize" data-search-filter="minSize" value="' + escapeHtml(searchFilters.minSize) + '" placeholder="min GB"><input id="searchFilterMaxSize" data-search-filter="maxSize" value="' + escapeHtml(searchFilters.maxSize) + '" placeholder="max GB"></div></th>' +
+            '<th></th>' +
+            '<th></th>' +
+            '<th><span class="result-count">' + entries.length + "/" + streams.length + '</span></th>' +
+            '</tr>';
+        html += '</thead><tbody>';
+        if (!entries.length) {
+            html += '<tr><td colspan="8" class="empty-table-cell">Filtr neodpovídá žádnému streamu.</td></tr>';
+        } else {
+            html += entries.map(function (entry) {
+                var stream = entry.stream;
+                var season = stream.season && stream.episode ? '<span class="episode-badge">S' + stream.season + ' E' + stream.episode + '</span>' : "";
+                return '<tr>' +
+                    '<td class="check-col"><input type="checkbox" class="search-stream-check" data-index="' + entry.index + '"></td>' +
+                    '<td>' + providerBadge(stream.provider) + '</td>' +
+                    '<td><strong>' + escapeHtml(stream.filename) + '</strong> ' + season + '</td>' +
+                    '<td>' + escapeHtml(stream.format || "-") + '</td>' +
+                    '<td class="numeric-cell" data-sort-value="' + Number(stream.size || 0) + '">' + formatBytes(stream.size) + '</td>' +
+                    '<td>' + escapeHtml(streamResolution(stream)) + '</td>' +
+                    '<td class="numeric-cell">' + formatDuration(stream.duration) + '</td>' +
+                    '<td><button type="button" class="play-button compact-button" data-action="play-stream" data-ident="' + escapeHtml(streamIdent(stream)) + '" data-title="' + escapeHtml(stream.filename) + '">Přehrát</button></td>' +
+                    '</tr>';
+            }).join("");
+        }
+        html += '</tbody></table></div>';
+        return html;
     }
 
     function toggleSearchStreams(checked) {
@@ -706,6 +807,10 @@
 
         if (action === "detail") showDetail(id);
         if (action === "save-selected") saveSelectedStreams();
+        if (action === "sort-search") {
+            event.preventDefault();
+            sortSearchResults(target.getAttribute("data-key"));
+        }
         if (action === "check-media") checkMediaStreams(id);
         if (action === "delete-pending") deletePendingStreams(id);
         if (action === "check-stream") checkStream(id);
@@ -718,6 +823,30 @@
         }
         if (action === "close-player") closePlayer();
         if (action === "fullscreen-player") fullscreenPlayer();
+    }
+
+    function sortSearchResults(key) {
+        if (!key || key === "selected") return;
+        if (searchSort.key === key) {
+            searchSort.direction = searchSort.direction === "asc" ? "desc" : "asc";
+        } else {
+            searchSort.key = key;
+            searchSort.direction = key === "size" || key === "resolution" || key === "duration" ? "desc" : "asc";
+        }
+        renderSearchResults();
+    }
+
+    function refreshSearchAfterFilter(inputId) {
+        var node = el(inputId);
+        var start = node && typeof node.selectionStart === "number" ? node.selectionStart : null;
+        var end = node && typeof node.selectionEnd === "number" ? node.selectionEnd : null;
+        renderSearchResults();
+        node = el(inputId);
+        if (!node) return;
+        node.focus();
+        if (start !== null && node.setSelectionRange) {
+            node.setSelectionRange(start, end);
+        }
     }
 
     function setOption(targetId, value) {
@@ -790,6 +919,16 @@
         document.addEventListener("change", function (event) {
             if (event.target && event.target.id === "selectAllStreams") {
                 toggleSearchStreams(event.target.checked);
+            }
+            if (event.target && event.target.getAttribute && event.target.getAttribute("data-search-filter")) {
+                updateSearchFilter(event.target.id, event.target.getAttribute("data-search-filter"));
+                refreshSearchAfterFilter(event.target.id);
+            }
+        });
+        document.addEventListener("input", function (event) {
+            if (event.target && event.target.getAttribute && event.target.getAttribute("data-search-filter")) {
+                updateSearchFilter(event.target.id, event.target.getAttribute("data-search-filter"));
+                refreshSearchAfterFilter(event.target.id);
             }
         });
 
