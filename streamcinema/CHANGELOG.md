@@ -2,6 +2,14 @@
 
 Všechny důležité změny add-onu StreamCinema API jsou vedené v tomto souboru.
 
+## 0.3.14
+
+- Webshare přehrávání nyní používá stejnou backend proxy jako Fastshare.
+- Webshare token se před přehráním ověřuje a při chybě se automaticky obnoví.
+- Generování Webshare linku posílá `device_uuid`, vynucuje HTTPS a zkouší fallback z `video_stream` na `file_download`.
+- Proxy předává `wst` cookie a `Range` požadavky, aby šlo video načítat a posouvat i ve vestavěném prohlížečovém přehrávači.
+- Ve sbírce je seznam streamů u filmu oddělený nadpisem `Streamy`, aby nelepil na akční tlačítka.
+
 ## 0.3.13
 
 - Opraveno obecné přehrávání streamů z GUI pro Webshare i Fastshare.

@@ -2,6 +2,14 @@
 
 This file is intentionally duplicated at the repository root for Home Assistant compatibility. The add-on changelog source is `streamcinema/CHANGELOG.md`.
 
+## 0.3.14
+
+- Webshare playback now uses the same backend proxy as Fastshare.
+- The Webshare token is validated before playback and automatically refreshed after link errors.
+- Webshare link generation sends `device_uuid`, forces HTTPS, and falls back from `video_stream` to `file_download`.
+- The proxy forwards the `wst` cookie and `Range` requests so video can load and seek in the embedded browser player.
+- Movie collection stream lists are separated from action buttons with a `Streamy` heading.
+
 ## 0.3.13
 
 - Fixed general stream playback from the GUI for both Webshare and Fastshare.

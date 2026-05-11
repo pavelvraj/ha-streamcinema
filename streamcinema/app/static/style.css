@@ -349,6 +349,10 @@ textarea {
     padding-top: 14px;
 }
 
+.collection-streams h3 {
+    margin: 18px 0 10px;
+}
+
 .detail-panel {
     min-height: 680px;
     padding: 16px;

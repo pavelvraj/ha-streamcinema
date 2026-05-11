@@ -569,7 +569,7 @@
                 '</div>' +
             '</section>' +
             renderStreamBulkActions(item) +
-            (item.type === "tvshow" ? renderSeasons(item) : renderStreams(item.streams || []));
+            (item.type === "tvshow" ? renderSeasons(item) : renderMovieStreams(item));
     }
 
     function openMediaEditForm() {
@@ -593,6 +593,13 @@
                 '<button type="button" data-action="check-media" data-id="' + escapeHtml(item._id) + '">Kontrola</button>' +
                 '<button type="button" class="danger" data-action="delete-pending" data-id="' + escapeHtml(item._id) + '">Vyřadit označené</button>' +
             '</div>';
+    }
+
+    function renderMovieStreams(item) {
+        return '<section class="collection-streams">' +
+            '<h3>Streamy</h3>' +
+            renderStreams(item.streams || []) +
+            '</section>';
     }
 
     function renderSeasons(item) {
@@ -691,6 +698,9 @@
                 titleNode.textContent = title || "Přehrávač";
                 openLink.href = data.link;
                 player.src = data.link;
+                player.onerror = function () {
+                    showStatus("Stream link se podařilo získat, ale přehrávač ho nedokázal načíst.", "error");
+                };
                 modal.className = "player-modal";
                 showStatus("", "info");
                 var playPromise = player.play();

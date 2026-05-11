@@ -616,7 +616,7 @@ def render_search_page(result):
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Stream Cinema - výsledky</title>
-        <link rel="stylesheet" href="../static/style.css?v=0.3.13">
+        <link rel="stylesheet" href="../static/style.css?v=0.3.14">
     </head>
     <body>
         <div class="app-shell">
@@ -1065,7 +1065,7 @@ def get_file_link(ident: str):
         ident = unquote(ident or "")
         provider, file_id = ident.split(":", 1)
         if provider == "webshare":
-            link = WS.get_link(file_id)
+            link = f"api/stream_proxy/{provider}:{file_id}"
         elif provider == "fastshare":
             link = f"api/stream_proxy/{provider}:{file_id}"
         else:
@@ -1095,23 +1095,36 @@ def is_fastshare_url(url):
     )
 
 
+def is_webshare_url(url):
+    parsed = urlparse(url or "")
+    return parsed.scheme in ("http", "https") and parsed.netloc.endswith("webshare.cz")
+
+
 @app.get("/api/stream_proxy/{ident:path}")
 def stream_proxy(ident: str, request: Request, url: str = ""):
     try:
         ident = unquote(ident or "")
         provider, file_id = ident.split(":", 1)
-        if provider != "fastshare":
+        if provider not in ("fastshare", "webshare"):
             raise HTTPException(status_code=404, detail="Unsupported provider")
 
-        if not FS.logged_in:
+        if provider == "fastshare" and not FS.logged_in:
             FS.login()
+        if provider == "webshare" and not WS.token:
+            WS.ensure_token()
 
-        source_url = url if is_fastshare_url(url) else ""
-        source_url = source_url or stored_stream_url(provider, file_id) or FS.get_link(file_id)
+        if provider == "fastshare":
+            source_url = url if is_fastshare_url(url) else ""
+            source_url = source_url or stored_stream_url(provider, file_id) or FS.get_link(file_id)
+            headers = dict(FS.stream_headers())
+        else:
+            source_url = url if is_webshare_url(url) else ""
+            source_url = source_url or WS.get_link(file_id)
+            headers = dict(WS.stream_headers())
+
         if not source_url or "/free/" in source_url:
             raise HTTPException(status_code=404, detail="Stream link unavailable")
 
-        headers = dict(FS.stream_headers())
         range_header = request.headers.get("range")
         if range_header:
             headers["Range"] = range_header

@@ -1,5 +1,6 @@
 import hashlib
 import xml.etree.ElementTree as ET
+import uuid
 
 import requests
 from passlib.hash import md5_crypt
@@ -12,6 +13,7 @@ class WebshareScraper:
         self.username = username
         self.password = password
         self.token = None
+        self.device_uuid = str(uuid.uuid4())
 
     def _post(self, endpoint, data):
         data = dict(data)
@@ -39,6 +41,9 @@ class WebshareScraper:
 
     def _fatal_message(self, root):
         return root.findtext("message") or root.findtext("code") or "unknown error"
+
+    def _is_ok(self, root):
+        return root is not None and root.findtext("status") == "OK"
 
     def login(self):
         if not self.username or not self.password:
@@ -87,6 +92,18 @@ class WebshareScraper:
 
         return False
 
+    def ensure_token(self):
+        if not self.token:
+            return self.login()
+
+        root = self._post("/user_data/", {})
+        if self._is_ok(root):
+            return True
+
+        print(f"WS Token Error: {self._fatal_message(root) if root is not None else 'missing response'}")
+        self.token = None
+        return self.login()
+
     def search(self, query):
         if self.username and self.password and not self.token:
             self.login()
@@ -120,17 +137,37 @@ class WebshareScraper:
         return results
 
     def get_link(self, ident):
-        if not self.token and not self.login():
+        if not self.ensure_token():
             return None
 
-        root = self._post(
-            "/file_link/",
-            {"ident": ident, "download_type": "video_stream"},
-        )
-        if root is None:
-            return None
-        if root.findtext("status") != "OK":
-            print(f"WS Link Error: {self._fatal_message(root)}")
-            return None
+        for index, download_type in enumerate(("video_stream", "file_download", "")):
+            data = {
+                "ident": ident,
+                "device_uuid": self.device_uuid,
+                "device_vendor": "HomeAssistant",
+                "device_model": "StreamCinema",
+                "force_https": 1,
+            }
+            if download_type:
+                data["download_type"] = download_type
 
-        return root.findtext("link")
+            root = self._post("/file_link/", data)
+            if root is None:
+                return None
+
+            if self._is_ok(root):
+                return root.findtext("link")
+
+            message = self._fatal_message(root)
+            print(f"WS Link Error ({download_type or 'default'}): {message}")
+            if index == 0:
+                self.token = None
+                if not self.login():
+                    return None
+
+        return None
+
+    def stream_headers(self):
+        if self.token:
+            return {"Cookie": f"wst={self.token}"}
+        return {}
