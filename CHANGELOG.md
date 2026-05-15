@@ -2,6 +2,16 @@
 
 This file is intentionally duplicated at the repository root for Home Assistant compatibility. The add-on changelog source is `streamcinema/CHANGELOG.md`.
 
+## 0.3.15
+
+- The edit form can now change title, genres, and the stored search query.
+- Collection items remember the original search text for future refreshes.
+- Media details now include an `Aktualizovat` button that searches again, keeps matching streams, removes missing streams, and offers newly found streams for the existing item.
+- Stream checks now preselect broken streams marked for removal.
+- Genres are shown as badges in search and collection views and can be edited before saving or from item details.
+- Search only uses providers with configured credentials and is blocked with a clear message when no provider is configured.
+- Clicking anywhere in a stream row toggles its checkbox in search and collection views.
+
 ## 0.3.14
 
 - Webshare playback now uses the same backend proxy as Fastshare.

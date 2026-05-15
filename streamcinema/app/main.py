@@ -82,6 +82,42 @@ def json_dumps(value):
     return json.dumps(value or [], ensure_ascii=False)
 
 
+def clean_list(value):
+    if isinstance(value, str):
+        parts = re.split(r"[,;]", value)
+    elif isinstance(value, list):
+        parts = value
+    else:
+        parts = []
+
+    cleaned = []
+    seen = set()
+    for item in parts:
+        text = str(item or "").strip()
+        key = text.lower()
+        if text and key not in seen:
+            cleaned.append(text)
+            seen.add(key)
+    return cleaned
+
+
+def enabled_sources():
+    sources = []
+    if WS.username and WS.password:
+        sources.append(("webshare", WS))
+    if FS.username and FS.password:
+        sources.append(("fastshare", FS))
+    return sources
+
+
+def ensure_search_sources():
+    if not enabled_sources():
+        raise HTTPException(
+            status_code=400,
+            detail="Nelze vyhledávat, dokud není v konfiguraci zadáno přihlášení alespoň k jednomu zdroji.",
+        )
+
+
 def parse_stream_info(filename):
     name = filename or ""
     lower = name.lower()
@@ -284,7 +320,7 @@ def series_search_queries(query):
 
 def search_provider_files(query):
     all_files = []
-    for scraper in (WS, FS):
+    for _source_name, scraper in enabled_sources():
         try:
             all_files.extend(scraper.search(query))
         except Exception as exc:
@@ -300,9 +336,9 @@ def upsert_media(conn, metadata, selected_streams):
         """
         INSERT INTO media (
             id, type, title, original_title, year, genres, rating, plot,
-            poster, fanart, imdb_id, csfd_id
+            poster, fanart, imdb_id, csfd_id, search_query
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
             type=excluded.type,
             title=excluded.title,
@@ -314,7 +350,8 @@ def upsert_media(conn, metadata, selected_streams):
             poster=excluded.poster,
             fanart=excluded.fanart,
             imdb_id=excluded.imdb_id,
-            csfd_id=excluded.csfd_id
+            csfd_id=excluded.csfd_id,
+            search_query=excluded.search_query
         """,
         (
             media_id,
@@ -322,13 +359,14 @@ def upsert_media(conn, metadata, selected_streams):
             metadata.get("title") or "",
             metadata.get("original_title") or "",
             metadata.get("year") or 0,
-            json_dumps(metadata.get("genres")),
+            json_dumps(clean_list(metadata.get("genres"))),
             metadata.get("rating") or 0.0,
             metadata.get("plot") or "",
             metadata.get("poster") or "",
             metadata.get("fanart") or metadata.get("poster") or "",
             metadata.get("imdb_id"),
             metadata.get("csfd_id"),
+            metadata.get("search_query") or metadata.get("title") or "",
         ),
     )
 
@@ -345,8 +383,8 @@ def add_stream(conn, media_id, stream):
         return
 
     exists = conn.execute(
-        "SELECT 1 FROM streams WHERE provider=? AND ident=?",
-        (provider, ident),
+        "SELECT 1 FROM streams WHERE media_id=? AND provider=? AND ident=?",
+        (media_id, provider, ident),
     ).fetchone()
     if exists:
         return
@@ -478,6 +516,7 @@ def serialize_media_row(conn, row, include_streams=True):
         "fanart": media.get("fanart") or media.get("poster") or "",
         "imdb_id": media.get("imdb_id"),
         "csfd_id": media.get("csfd_id"),
+        "search_query": media.get("search_query") or media.get("title") or "",
         "stream_count": len(streams),
         "streams": streams,
         "seasons": group_episodes(streams),
@@ -513,7 +552,9 @@ def check_stream(stream):
 
 
 def search_and_save(query):
+    ensure_search_sources()
     metadata = metadata_for_query(query)
+    metadata["search_query"] = query
     streams = search_provider_streams(query, metadata.get("type") or "movie")
     metadata["type"] = infer_media_type(streams, metadata)
     conn = get_db_connection()
@@ -616,7 +657,7 @@ def render_search_page(result):
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Stream Cinema - výsledky</title>
-        <link rel="stylesheet" href="../static/style.css?v=0.3.14">
+        <link rel="stylesheet" href="../static/style.css?v=0.3.15">
     </head>
     <body>
         <div class="app-shell">
@@ -773,6 +814,16 @@ def ping():
     return {"status": "ok", "message": "pong"}
 
 
+@app.get("/api/source_status")
+def source_status():
+    sources = [name for name, _scraper in enabled_sources()]
+    return {
+        "enabled_sources": sources,
+        "can_search": bool(sources),
+        "message": "" if sources else "Nelze vyhledávat, dokud není v konfiguraci zadáno přihlášení alespoň k jednomu zdroji.",
+    }
+
+
 @app.get("/api/catalog")
 def catalog(q: str = "", media_type: str = "all"):
     conn = get_db_connection()
@@ -809,15 +860,22 @@ def media_detail(media_id: str):
 
 
 def run_search_preview(q: str, media_type: str = "movie"):
-    query = q.strip()
+    query = (q or "").strip()
     if not query:
         return {"metadata": None, "streams": []}
 
+    ensure_search_sources()
     media_type = media_type if media_type in ("movie", "tvshow") else "movie"
     metadata = metadata_for_query(query, media_type=media_type)
+    metadata["search_query"] = query
     streams = search_provider_streams(query, media_type)
     metadata["type"] = media_type
-    return {"metadata": metadata, "streams": streams, "totalCount": len(streams)}
+    return {
+        "metadata": metadata,
+        "streams": streams,
+        "totalCount": len(streams),
+        "enabled_sources": [name for name, _scraper in enabled_sources()],
+    }
 
 
 @app.get("/api/search_json")
@@ -867,6 +925,8 @@ def update_media(media_id: str, payload: dict = Body(...)):
         title = payload.get("title")
         fanart = payload.get("fanart")
         rating = payload.get("rating")
+        genres = clean_list(payload.get("genres")) if "genres" in payload else safe_json_loads(current.get("genres"), [])
+        search_query = payload.get("search_query")
         try:
             rating = max(0.0, min(100.0, float(rating))) if rating is not None else current.get("rating") or 0.0
         except (TypeError, ValueError):
@@ -875,16 +935,18 @@ def update_media(media_id: str, payload: dict = Body(...)):
         conn.execute(
             """
             UPDATE media
-            SET type=?, title=?, rating=?, plot=?, poster=?, fanart=?
+            SET type=?, title=?, genres=?, rating=?, plot=?, poster=?, fanart=?, search_query=?
             WHERE id=?
             """,
             (
                 media_type,
                 title if title is not None else current.get("title") or "",
+                json_dumps(genres),
                 rating,
                 plot if plot is not None else current.get("plot") or "",
                 poster if poster is not None else current.get("poster") or "",
                 fanart if fanart is not None else (poster if poster is not None else current.get("fanart") or current.get("poster") or ""),
+                search_query if search_query is not None else current.get("search_query") or current.get("title") or "",
                 media_id,
             ),
         )
@@ -907,6 +969,101 @@ def delete_media(media_id: str):
         conn.execute("DELETE FROM media WHERE id=?", (media_id,))
         conn.commit()
         return {"status": "ok"}
+    finally:
+        conn.close()
+
+
+@app.post("/api/media/{media_id}/streams")
+def add_media_streams(media_id: str, payload: dict = Body(...)):
+    streams = payload.get("streams") or []
+    conn = get_db_connection()
+    try:
+        row = conn.execute("SELECT * FROM media WHERE id=?", (media_id,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Media not found")
+
+        before = conn.execute(
+            "SELECT COUNT(*) FROM streams WHERE media_id=?",
+            (media_id,),
+        ).fetchone()[0]
+        for stream in streams:
+            add_stream(conn, media_id, stream)
+        refresh_stream_grouping(conn, media_id)
+        after = conn.execute(
+            "SELECT COUNT(*) FROM streams WHERE media_id=?",
+            (media_id,),
+        ).fetchone()[0]
+        conn.commit()
+        row = conn.execute("SELECT * FROM media WHERE id=?", (media_id,)).fetchone()
+        return {
+            "status": "ok",
+            "added": max(0, after - before),
+            "media": serialize_media_row(conn, row, include_streams=True),
+        }
+    finally:
+        conn.close()
+
+
+@app.post("/api/media/{media_id}/refresh")
+def refresh_media_streams(media_id: str):
+    ensure_search_sources()
+    conn = get_db_connection()
+    try:
+        row = conn.execute("SELECT * FROM media WHERE id=?", (media_id,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Media not found")
+
+        media = dict(row)
+        query = (media.get("search_query") or media.get("title") or "").strip()
+        if not query:
+            raise HTTPException(status_code=400, detail="Media has no stored search query")
+
+        found_streams = search_provider_streams(query, media.get("type") or "movie")
+        found_keys = {
+            (stream.get("provider"), str(stream.get("ident")))
+            for stream in found_streams
+            if stream.get("provider") and stream.get("ident")
+        }
+
+        existing_rows = conn.execute(
+            "SELECT * FROM streams WHERE media_id=?",
+            (media_id,),
+        ).fetchall()
+        existing_keys = {
+            (row["provider"], str(row["ident"])): row
+            for row in existing_rows
+        }
+
+        removed = 0
+        kept = 0
+        now = datetime.utcnow().isoformat(timespec="seconds")
+        for key, stream_row in existing_keys.items():
+            if key in found_keys:
+                kept += 1
+                conn.execute(
+                    "UPDATE streams SET status='active', last_checked_at=? WHERE id=?",
+                    (now, stream_row["id"]),
+                )
+            else:
+                removed += 1
+                conn.execute("DELETE FROM streams WHERE id=?", (stream_row["id"],))
+
+        new_streams = [
+            stream for stream in found_streams
+            if (stream.get("provider"), str(stream.get("ident"))) not in existing_keys
+        ]
+
+        refresh_stream_grouping(conn, media_id)
+        conn.commit()
+        row = conn.execute("SELECT * FROM media WHERE id=?", (media_id,)).fetchone()
+        return {
+            "status": "ok",
+            "query": query,
+            "kept": kept,
+            "removed": removed,
+            "new_streams": new_streams,
+            "media": serialize_media_row(conn, row, include_streams=True),
+        }
     finally:
         conn.close()
 

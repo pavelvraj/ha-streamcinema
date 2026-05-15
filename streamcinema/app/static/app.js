@@ -2,6 +2,8 @@
     var API_URL = "api";
     var catalogItems = [];
     var currentSearch = null;
+    var currentRefresh = null;
+    var sourceStatus = { can_search: true, message: "" };
     var selectedMediaId = null;
     var searchSort = { key: "size", direction: "desc" };
     var searchFilters = { provider: "", format: "", text: "", minSize: "", maxSize: "" };
@@ -36,6 +38,16 @@
             }
             return response.json();
         });
+    }
+
+    function errorMessage(error, fallback) {
+        var text = error && error.message ? error.message : "";
+        try {
+            var data = JSON.parse(text);
+            return data.detail || data.message || fallback;
+        } catch (ignore) {
+            return text || fallback;
+        }
     }
 
     function requestJsonXhr(url, options) {
@@ -88,6 +100,26 @@
 
     function ratingBadge(value) {
         return '<span class="catalog-rating">' + Number(value || 0).toFixed(0) + '%</span>';
+    }
+
+    function genreBadges(genres) {
+        genres = genres || [];
+        if (!genres.length) return '<span class="muted-inline">Bez žánru</span>';
+        return '<span class="genre-badges">' + genres.map(function (genre) {
+            return '<span class="genre-badge">' + escapeHtml(genre) + '</span>';
+        }).join("") + '</span>';
+    }
+
+    function parseGenreInput(value) {
+        var seen = {};
+        return String(value || "").split(/[;,]/).map(function (item) {
+            return item.trim();
+        }).filter(function (item) {
+            var key = item.toLowerCase();
+            if (!item || seen[key]) return false;
+            seen[key] = true;
+            return true;
+        });
     }
 
     function providerBadge(provider) {
@@ -272,6 +304,23 @@
             });
     }
 
+    function loadSourceStatus() {
+        return requestJson(API_URL + "/source_status")
+            .then(function (data) {
+                sourceStatus = data || sourceStatus;
+                var searchButton = el("searchButton");
+                if (searchButton && !sourceStatus.can_search) {
+                    searchButton.disabled = true;
+                }
+                if (!sourceStatus.can_search) {
+                    showStatus(sourceStatus.message || "Nejdřív vyplň přihlášení k Webshare nebo Fastshare v konfiguraci add-onu.", "error");
+                }
+            })
+            .catch(function (error) {
+                console.error(error);
+            });
+    }
+
     function renderCatalog() {
         var container = el("catalogList");
         if (!container) return;
@@ -291,6 +340,7 @@
                     '<div class="catalog-copy">' +
                         '<strong>' + escapeHtml(item.title) + '</strong>' +
                         '<span>' + typeLabel + ' · ' + (item.year || "-") + ' · ' + (item.stream_count || 0) + ' streamů</span>' +
+                        genreBadges(item.genres || []) +
                     '</div>' +
                     ratingBadge(item.rating) +
                 '</button>';
@@ -304,6 +354,14 @@
         var query = input ? input.value.trim() : "";
         var mediaType = type ? type.value : "movie";
         console.log("StreamCinema search click", query);
+        if (!sourceStatus.can_search) {
+            showStatus(sourceStatus.message || "Nelze vyhledávat bez přihlášení alespoň k jednomu zdroji.", "error");
+            if (panel) {
+                panel.classList.remove("hidden");
+                panel.innerHTML = '<div class="empty-list">' + escapeHtml(sourceStatus.message || "Nejdřív vyplň přihlášení k Webshare nebo Fastshare v konfiguraci add-onu.") + '</div>';
+            }
+            return;
+        }
         if (!query) {
             showStatus("Zadej název filmu nebo seriálu.", "error");
             return;
@@ -326,7 +384,7 @@
             })
             .catch(function (error) {
                 console.error(error);
-                showStatus("Vyhledávání selhalo. Zkontroluj log add-onu.", "error");
+                showStatus(errorMessage(error, "Vyhledávání selhalo. Zkontroluj log add-onu."), "error");
                 setSearching(false);
             });
     }
@@ -350,12 +408,16 @@
                 '<div>' +
                     '<h2>' + escapeHtml(metadata.title) + '</h2>' +
                     '<p>' + (metadata.year || "-") + ' · ' + (metadata.type === "tvshow" ? "Seriál" : "Film") + ' · ' + (metadata.rating || 0) + '% · ' + String(metadata.source || "").toUpperCase() + '</p>' +
+                    genreBadges(metadata.genres || []) +
                     '<p>' + escapeHtml(metadata.plot || "Bez popisu.") + '</p>' +
                 '</div>' +
             '</div>' +
             '<div class="stream-actions">' +
                 '<label><input type="checkbox" id="selectAllStreams"> Vybrat vše</label>' +
                 '<button type="button" data-action="save-selected">Zařadit vybrané do sbírky</button>' +
+            '</div>' +
+            '<div class="search-metadata-edit">' +
+                '<label>Žánry pro uložení<input id="searchGenres" type="text" value="' + escapeHtml((metadata.genres || []).join(", ")) + '" placeholder="Akční, Komedie, Sci-fi"></label>' +
             '</div>' +
             renderSearchStreams(metadata.type, streams);
 
@@ -461,7 +523,7 @@
             html += entries.map(function (entry) {
                 var stream = entry.stream;
                 var season = stream.season && stream.episode ? '<span class="episode-badge">S' + stream.season + ' E' + stream.episode + '</span>' : "";
-                return '<tr>' +
+                return '<tr class="selectable-row" data-toggle-search-index="' + entry.index + '">' +
                     '<td class="check-col"><input type="checkbox" class="search-stream-check" data-index="' + entry.index + '"></td>' +
                     '<td>' + providerBadge(stream.provider) + '</td>' +
                     '<td><strong>' + escapeHtml(stream.filename) + '</strong> ' + season + '</td>' +
@@ -487,6 +549,7 @@
     function saveSelectedStreams() {
         var checks = document.querySelectorAll(".search-stream-check:checked");
         var streams = [];
+        var genreInput = el("searchGenres");
         for (var i = 0; i < checks.length; i += 1) {
             streams.push(currentSearch.streams[Number(checks[i].getAttribute("data-index"))]);
         }
@@ -497,6 +560,9 @@
         }
 
         showStatus("Ukládám vybrané streamy...", "info");
+        if (genreInput && currentSearch && currentSearch.metadata) {
+            currentSearch.metadata.genres = parseGenreInput(genreInput.value);
+        }
         requestJson(API_URL + "/media", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -531,7 +597,6 @@
 
     function renderDetail(item) {
         var poster = item.poster || "";
-        var genres = (item.genres || []).join(", ");
         var panel = el("detailPanel");
         if (!panel) return;
         var isTvshow = item.type === "tvshow";
@@ -543,13 +608,16 @@
                     '<div class="detail-title-row">' +
                         '<div>' +
                             '<h2>' + escapeHtml(item.title) + '</h2>' +
-                            '<p>' + (item.year || "-") + ' · ' + (item.type === "tvshow" ? "Seriál" : "Film") + ' · ' + escapeHtml(genres) + '</p>' +
+                            '<p>' + (item.year || "-") + ' · ' + (item.type === "tvshow" ? "Seriál" : "Film") + '</p>' +
+                            genreBadges(item.genres || []) +
+                            '<p class="search-query-note">Vyhledávací dotaz: <strong>' + escapeHtml(item.search_query || item.title || "") + '</strong></p>' +
                         '</div>' +
                         '<strong class="rating">' + (item.rating || 0) + '%</strong>' +
                     '</div>' +
                     '<p class="plot">' + escapeHtml(item.plot || "Bez popisu.") + '</p>' +
                     '<div class="detail-actions">' +
                         '<button type="button" id="editMediaButton" data-action="open-media-edit">Upravit položku</button>' +
+                        '<button type="button" data-action="refresh-media" data-id="' + escapeHtml(item._id) + '">Aktualizovat</button>' +
                         '<button type="button" class="danger" data-action="delete-media" data-id="' + escapeHtml(item._id) + '">Smazat položku</button>' +
                     '</div>' +
                 '</div>' +
@@ -557,8 +625,11 @@
             '<section id="mediaEditForm" class="edit-form hidden">' +
                 '<h3>Upravit položku</h3>' +
                 '<div class="edit-grid">' +
+                    '<label>Název<input id="editTitle" type="text" value="' + escapeHtml(item.title || "") + '"></label>' +
                     '<label>Typ' + renderSegmentedInput("editType", isTvshow ? "tvshow" : "movie", [{ value: "movie", label: "Film" }, { value: "tvshow", label: "Seriál" }]) + '</label>' +
                     '<label>Hodnocení ČSFD (%)<input id="editRating" type="number" min="0" max="100" step="1" value="' + escapeHtml(item.rating || 0) + '"></label>' +
+                    '<label>Žánry<input id="editGenres" type="text" value="' + escapeHtml((item.genres || []).join(", ")) + '" placeholder="Akční, Komedie"></label>' +
+                    '<label>Vyhledávací dotaz<input id="editSearchQuery" type="text" value="' + escapeHtml(item.search_query || item.title || "") + '"></label>' +
                     '<label>URL obrázku<input id="editPosterUrl" type="text" value="' + escapeHtml(poster) + '" placeholder="https://..."></label>' +
                     '<label>Vlastní obrázek<input id="editPosterFile" type="file" accept="image/*"></label>' +
                 '</div>' +
@@ -569,6 +640,7 @@
                 '</div>' +
             '</section>' +
             renderStreamBulkActions(item) +
+            '<section id="refreshPanel" class="refresh-panel hidden"></section>' +
             (item.type === "tvshow" ? renderSeasons(item) : renderMovieStreams(item));
     }
 
@@ -633,8 +705,8 @@
         return '<div class="stream-table">' + streams.map(function (stream) {
             var pending = stream.status === "pending_delete";
             return '' +
-                '<div class="stream-row ' + (pending ? "pending" : "") + '">' +
-                    '<input type="checkbox" class="collection-stream-check" value="' + stream.id + '">' +
+                '<div class="stream-row selectable-row ' + (pending ? "pending" : "") + '" data-toggle-collection-check="' + stream.id + '">' +
+                    '<input type="checkbox" class="collection-stream-check" value="' + stream.id + '"' + (pending ? " checked" : "") + '>' +
                     '<div>' +
                         '<strong>' + escapeHtml(stream.filename) + '</strong>' +
                         '<span class="stream-badges">' + providerBadge(stream.provider) + statusBadge(stream.status) + streamMetaLine(stream, true) + '</span>' +
@@ -739,7 +811,7 @@
         showStatus("Kontroluji streamy...", "info");
         requestJson(API_URL + "/media/" + encodeURIComponent(mediaId) + "/check_streams", { method: "POST" })
             .then(function () {
-                showStatus("Kontrola dokončena. Chybné streamy jsou označené k vyřazení.", "success");
+                showStatus("Kontrola dokončena. Chybné streamy jsou označené a rovnou zaškrtnuté.", "success");
                 return showDetail(mediaId);
             })
             .catch(function (error) {
@@ -750,8 +822,8 @@
 
     function checkStream(streamId) {
         requestJson(API_URL + "/streams/" + streamId + "/check", { method: "POST" })
-            .then(function () {
-                showStatus("Stream byl zkontrolován.", "success");
+            .then(function (stream) {
+                showStatus(stream.status === "pending_delete" ? "Stream je nefunkční a je zaškrtnutý k vyřazení." : "Stream byl zkontrolován.", "success");
                 return showDetail(selectedMediaId);
             })
             .catch(function (error) {
@@ -835,8 +907,90 @@
         });
     }
 
+    function renderRefreshPanel(result) {
+        var panel = el("refreshPanel");
+        if (!panel) return;
+        var streams = result.new_streams || [];
+        currentRefresh = result;
+        panel.classList.remove("hidden");
+        panel.innerHTML = '' +
+            '<h3>Nové streamy k přidání</h3>' +
+            '<p class="refresh-summary">Dotaz: <strong>' + escapeHtml(result.query || "") + '</strong> · Zachováno: ' + Number(result.kept || 0) + ' · Vyřazeno: ' + Number(result.removed || 0) + ' · Nové: ' + streams.length + '</p>' +
+            (streams.length ? '<div class="stream-actions"><label><input type="checkbox" id="selectAllRefreshStreams"> Vybrat vše</label><button type="button" data-action="add-refresh-streams">Přidat vybrané streamy</button></div>' + renderRefreshStreamTable(streams) : '<div class="empty-list">Aktualizace nenašla žádné nové streamy.</div>');
+    }
+
+    function renderRefreshStreamTable(streams) {
+        var html = '<div class="search-table-wrap"><table class="search-results-table"><thead><tr><th class="check-col"></th><th>Zdroj</th><th>Název</th><th>Formát</th><th>Velikost</th><th>Rozlišení</th><th>Délka</th><th>Akce</th></tr></thead><tbody>';
+        html += streams.map(function (stream, index) {
+            var season = stream.season && stream.episode ? '<span class="episode-badge">S' + stream.season + ' E' + stream.episode + '</span>' : "";
+            return '<tr class="selectable-row" data-toggle-search-index="' + index + '">' +
+                '<td class="check-col"><input type="checkbox" class="search-stream-check" data-index="' + index + '"></td>' +
+                '<td>' + providerBadge(stream.provider) + '</td>' +
+                '<td><strong>' + escapeHtml(stream.filename) + '</strong> ' + season + '</td>' +
+                '<td>' + escapeHtml(stream.format || "-") + '</td>' +
+                '<td class="numeric-cell">' + formatBytes(stream.size) + '</td>' +
+                '<td>' + escapeHtml(streamResolution(stream)) + '</td>' +
+                '<td class="numeric-cell">' + formatDuration(stream.duration) + '</td>' +
+                '<td><button type="button" class="play-button compact-button" data-action="play-stream" data-ident="' + escapeHtml(streamIdent(stream)) + '" data-source-url="' + escapeHtml(stream.stream_url || "") + '" data-title="' + escapeHtml(stream.filename) + '">Přehrát</button></td>' +
+                '</tr>';
+        }).join("");
+        return html + '</tbody></table></div>';
+    }
+
+    function refreshMedia(mediaId) {
+        if (!mediaId) return;
+        showStatus("Aktualizuji streamy podle uloženého dotazu...", "info");
+        requestJson(API_URL + "/media/" + encodeURIComponent(mediaId) + "/refresh", { method: "POST" })
+            .then(function (result) {
+                showStatus("Aktualizace dokončena. Nové streamy můžeš vybrat a přidat.", "success");
+                return loadCatalog().then(function () {
+                    return showDetail(mediaId).then(function () {
+                        renderRefreshPanel(result);
+                    });
+                });
+            })
+            .catch(function (error) {
+                console.error(error);
+                showStatus(errorMessage(error, "Aktualizace streamů selhala."), "error");
+            });
+    }
+
+    function addRefreshStreams() {
+        if (!currentRefresh || !selectedMediaId) return;
+        var checks = document.querySelectorAll("#refreshPanel .search-stream-check:checked");
+        var streams = [];
+        for (var i = 0; i < checks.length; i += 1) {
+            streams.push(currentRefresh.new_streams[Number(checks[i].getAttribute("data-index"))]);
+        }
+        if (!streams.length) {
+            showStatus("Vyber alespoň jeden nový stream.", "error");
+            return;
+        }
+
+        showStatus("Přidávám nové streamy do existující položky...", "info");
+        requestJson(API_URL + "/media/" + encodeURIComponent(selectedMediaId) + "/streams", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ streams: streams }),
+        })
+            .then(function (result) {
+                currentRefresh = null;
+                showStatus("Přidáno streamů: " + Number(result.added || 0) + ".", "success");
+                return loadCatalog().then(function () {
+                    return showDetail(selectedMediaId);
+                });
+            })
+            .catch(function (error) {
+                console.error(error);
+                showStatus("Přidání nových streamů selhalo.", "error");
+            });
+    }
+
     function saveMediaEdits(mediaId) {
         var type = el("editType");
+        var title = el("editTitle");
+        var genres = el("editGenres");
+        var searchQuery = el("editSearchQuery");
         var plot = el("editPlot");
         var rating = el("editRating");
         showStatus("Ukládám změny položky...", "info");
@@ -846,7 +1000,10 @@
                     method: "PUT",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
+                        title: title ? title.value.trim() : "",
                         type: type ? type.value : "movie",
+                        genres: genres ? parseGenreInput(genres.value) : [],
+                        search_query: searchQuery ? searchQuery.value.trim() : "",
                         rating: rating ? rating.value : 0,
                         plot: plot ? plot.value : "",
                         poster: poster,
@@ -906,6 +1063,8 @@
             sortSearchResults(target.getAttribute("data-key"));
         }
         if (action === "check-media") checkMediaStreams(id);
+        if (action === "refresh-media") refreshMedia(id);
+        if (action === "add-refresh-streams") addRefreshStreams();
         if (action === "delete-pending") deletePendingStreams(id);
         if (action === "check-stream") checkStream(id);
         if (action === "delete-stream") deleteStream(id);
@@ -974,6 +1133,39 @@
         return null;
     }
 
+    function closestRowToggle(node, attribute) {
+        while (node && node !== document) {
+            if (node.getAttribute && node.getAttribute(attribute) != null) return node;
+            node = node.parentNode;
+        }
+        return null;
+    }
+
+    function shouldIgnoreRowToggle(target) {
+        var tag = target && target.tagName ? target.tagName.toLowerCase() : "";
+        return tag === "button" || tag === "input" || tag === "select" || tag === "textarea" || tag === "a" || tag === "label";
+    }
+
+    function toggleRowCheckbox(event) {
+        var searchRow;
+        var collectionRow;
+        var checkbox;
+        if (closestAction(event.target) || shouldIgnoreRowToggle(event.target)) return;
+
+        searchRow = closestRowToggle(event.target, "data-toggle-search-index");
+        if (searchRow) {
+            checkbox = searchRow.querySelector(".search-stream-check");
+            if (checkbox) checkbox.checked = !checkbox.checked;
+            return;
+        }
+
+        collectionRow = closestRowToggle(event.target, "data-toggle-collection-check");
+        if (collectionRow) {
+            checkbox = collectionRow.querySelector(".collection-stream-check");
+            if (checkbox) checkbox.checked = !checkbox.checked;
+        }
+    }
+
     function init() {
         window.streamCinemaSearch = function (event) {
             if (event && event.preventDefault) event.preventDefault();
@@ -1002,6 +1194,7 @@
         if (catalogFilter) catalogFilter.addEventListener("input", loadCatalog);
 
         document.addEventListener("click", handleClick);
+        document.addEventListener("click", toggleRowCheckbox);
         document.addEventListener("click", function (event) {
             var target = event.target;
             if (!target || !target.getAttribute || !target.getAttribute("data-option-target")) return;
@@ -1017,6 +1210,12 @@
             if (event.target && event.target.id === "selectAllStreams") {
                 toggleSearchStreams(event.target.checked);
             }
+            if (event.target && event.target.id === "selectAllRefreshStreams") {
+                var refreshChecks = document.querySelectorAll("#refreshPanel .search-stream-check");
+                for (var r = 0; r < refreshChecks.length; r += 1) {
+                    refreshChecks[r].checked = event.target.checked;
+                }
+            }
             if (event.target && event.target.getAttribute && event.target.getAttribute("data-search-filter")) {
                 updateSearchFilter(event.target.id, event.target.getAttribute("data-search-filter"));
                 refreshSearchAfterFilter(event.target.id, event.target.getAttribute("data-filter-scope"));
@@ -1029,7 +1228,7 @@
             }
         });
 
-        loadCatalog();
+        loadSourceStatus().then(loadCatalog);
     }
 
     if (document.readyState === "loading") {

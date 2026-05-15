@@ -2,6 +2,16 @@
 
 Všechny důležité změny add-onu StreamCinema API jsou vedené v tomto souboru.
 
+## 0.3.15
+
+- V části `Upravit položku` lze měnit název, žánry a uložený vyhledávací dotaz.
+- Položky ve sbírce si ukládají původní text vyhledávání pro pozdější aktualizace.
+- Detail položky má tlačítko `Aktualizovat`, které znovu vyhledá streamy, zachová nalezené, odstraní nenalezené a nabídne nové streamy k přidání do existující položky.
+- Kontrola streamů rovnou zaškrtne nefunkční streamy označené k vyřazení.
+- Žánry se zobrazují jako badge ve vyhledávání i ve sbírce a lze je upravit před uložením nebo v detailu položky.
+- Vyhledávání používá jen zdroje s vyplněnými přihlašovacími údaji a bez alespoň jednoho zdroje hledání zablokuje s vysvětlením.
+- Kliknutí kamkoliv do řádku streamu ve vyhledávání nebo sbírce přepíná příslušný checkbox.
+
 ## 0.3.14
 
 - Webshare přehrávání nyní používá stejnou backend proxy jako Fastshare.

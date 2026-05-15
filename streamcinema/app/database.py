@@ -13,6 +13,10 @@ STREAM_COLUMNS = {
     "stream_url": "TEXT",
 }
 
+MEDIA_COLUMNS = {
+    "search_query": "TEXT",
+}
+
 def get_db_connection():
     # Zajistíme existenci složky
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
@@ -39,6 +43,7 @@ def init_db():
             fanart TEXT,
             imdb_id TEXT,
             csfd_id TEXT,
+            search_query TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
@@ -72,6 +77,13 @@ def init_db():
     for column, definition in STREAM_COLUMNS.items():
         if column not in existing_columns:
             c.execute(f"ALTER TABLE streams ADD COLUMN {column} {definition}")
+
+    existing_media_columns = {
+        row["name"] for row in c.execute("PRAGMA table_info(media)").fetchall()
+    }
+    for column, definition in MEDIA_COLUMNS.items():
+        if column not in existing_media_columns:
+            c.execute(f"ALTER TABLE media ADD COLUMN {column} {definition}")
     
     conn.commit()
     conn.close()
