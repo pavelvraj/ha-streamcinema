@@ -2,6 +2,12 @@
 
 This file is intentionally duplicated at the repository root for Home Assistant compatibility. The add-on changelog source is `streamcinema/CHANGELOG.md`.
 
+## 0.3.17
+
+- New streams offered after refresh now have the same sorting and filtering table as search results.
+- Refresh offers are sorted by file size descending by default.
+- Refresh sorting and filters keep their own state, so they do not affect the main search results.
+
 ## 0.3.16
 
 - Search and refresh now show a prominent progress panel with a spinner, elapsed time, and concrete current steps.

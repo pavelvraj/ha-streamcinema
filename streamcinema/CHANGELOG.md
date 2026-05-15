@@ -2,6 +2,12 @@
 
 Všechny důležité změny add-onu StreamCinema API jsou vedené v tomto souboru.
 
+## 0.3.17
+
+- Nové streamy nabídnuté po aktualizaci mají stejné třídění a filtrování jako výsledky vyhledávání.
+- Výchozí řazení aktualizační nabídky je podle velikosti souboru sestupně.
+- Filtrování a řazení aktualizační nabídky má vlastní stav, takže neovlivňuje hlavní výsledky vyhledávání.
+
 ## 0.3.16
 
 - Vyhledávání a aktualizace zobrazují výrazný průběhový panel se spinnerem, běžícím časem a konkrétními kroky.

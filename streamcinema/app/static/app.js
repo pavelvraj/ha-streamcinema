@@ -7,6 +7,8 @@
     var selectedMediaId = null;
     var searchSort = { key: "size", direction: "desc" };
     var searchFilters = { provider: "", format: "", text: "", minSize: "", maxSize: "" };
+    var refreshSort = { key: "size", direction: "desc" };
+    var refreshFilters = { provider: "", format: "", text: "", minSize: "", maxSize: "" };
     var activeProgressTimer = null;
     var activeProgressStarted = 0;
     var GENRE_OPTIONS = [
@@ -276,6 +278,11 @@
         searchFilters = { provider: "", format: "", text: "", minSize: "", maxSize: "" };
     }
 
+    function resetRefreshTableState() {
+        refreshSort = { key: "size", direction: "desc" };
+        refreshFilters = { provider: "", format: "", text: "", minSize: "", maxSize: "" };
+    }
+
     function normalizeText(value) {
         return String(value || "").toLowerCase();
     }
@@ -314,30 +321,40 @@
         return values.sort(function (a, b) { return a.localeCompare(b); });
     }
 
-    function searchSortLabel(key) {
-        if (searchSort.key !== key) return "";
-        return searchSort.direction === "asc" ? " ▲" : " ▼";
+    function tableState(mode) {
+        return mode === "refresh"
+            ? { sort: refreshSort, filters: refreshFilters }
+            : { sort: searchSort, filters: searchFilters };
     }
 
-    function searchSortButton(key, label) {
+    function searchSortLabel(key, mode) {
+        var state = tableState(mode).sort;
+        if (state.key !== key) return "";
+        return state.direction === "asc" ? " ▲" : " ▼";
+    }
+
+    function searchSortButton(key, label, mode) {
         if (!label) return "";
-        return '<button type="button" class="sort-button" data-action="sort-search" data-key="' + escapeHtml(key) + '">' +
-            escapeHtml(label + searchSortLabel(key)) +
+        return '<button type="button" class="sort-button" data-action="sort-stream-table" data-mode="' + escapeHtml(mode || "search") + '" data-key="' + escapeHtml(key) + '">' +
+            escapeHtml(label + searchSortLabel(key, mode)) +
             '</button>';
     }
 
-    function filteredSearchEntries(streams) {
+    function filteredSearchEntries(streams, mode) {
         var entries = [];
-        var text = normalizeText(searchFilters.text);
-        var minSize = parseSizeFilter(searchFilters.minSize);
-        var maxSize = parseSizeFilter(searchFilters.maxSize);
+        var state = tableState(mode);
+        var filters = state.filters;
+        var sort = state.sort;
+        var text = normalizeText(filters.text);
+        var minSize = parseSizeFilter(filters.minSize);
+        var maxSize = parseSizeFilter(filters.maxSize);
 
         for (var i = 0; i < streams.length; i += 1) {
             var entry = streams[i] && streams[i].stream ? streams[i] : { stream: streams[i], index: i };
             var stream = entry.stream;
             var size = Number(stream.size || 0);
-            if (searchFilters.provider && stream.provider !== searchFilters.provider) continue;
-            if (searchFilters.format && String(stream.format || "") !== searchFilters.format) continue;
+            if (filters.provider && stream.provider !== filters.provider) continue;
+            if (filters.format && String(stream.format || "") !== filters.format) continue;
             if (text && normalizeText(stream.filename).indexOf(text) < 0) continue;
             if (minSize && size < minSize) continue;
             if (maxSize && size > maxSize) continue;
@@ -345,15 +362,15 @@
         }
 
         entries.sort(function (a, b) {
-            var av = searchSortValue(a.stream, searchSort.key);
-            var bv = searchSortValue(b.stream, searchSort.key);
+            var av = searchSortValue(a.stream, sort.key);
+            var bv = searchSortValue(b.stream, sort.key);
             var result;
             if (typeof av === "number" || typeof bv === "number") {
                 result = Number(av || 0) - Number(bv || 0);
             } else {
                 result = String(av || "").localeCompare(String(bv || ""));
             }
-            return searchSort.direction === "asc" ? result : -result;
+            return sort.direction === "asc" ? result : -result;
         });
         return entries;
     }
@@ -371,9 +388,10 @@
         return "";
     }
 
-    function updateSearchFilter(id, key) {
+    function updateSearchFilter(id, key, mode) {
         var node = el(id);
-        searchFilters[key] = node ? node.value : "";
+        var state = tableState(mode);
+        state.filters[key] = node ? node.value : "";
     }
 
     function escapeHtml(value) {
@@ -564,7 +582,7 @@
             return renderSearchSeriesTables(streams);
         }
 
-        return renderSearchStreamTable(streams, "");
+        return renderSearchStreamTable(streams, "", "search");
     }
 
     function renderSearchSeriesTables(streams) {
@@ -586,7 +604,7 @@
 
         seasons = Object.keys(grouped).sort(function (a, b) { return Number(a) - Number(b); });
         if (!seasons.length) {
-            return '<h3>Neroztříděné streamy</h3>' + renderSearchStreamTable(streams, "loose");
+            return '<h3>Neroztříděné streamy</h3>' + renderSearchStreamTable(streams, "loose", "search");
         }
 
         for (var s = 0; s < seasons.length; s += 1) {
@@ -596,53 +614,57 @@
             for (var e = 0; e < episodes.length; e += 1) {
                 var episode = episodes[e];
                 html += '<div class="episode-block"><h4>Díl ' + escapeHtml(episode) + '</h4>' +
-                    renderSearchStreamTable(grouped[season][episode], "s" + season + "e" + episode) +
+                    renderSearchStreamTable(grouped[season][episode], "s" + season + "e" + episode, "search") +
                     '</div>';
             }
             html += '</details>';
         }
         html += '</div>';
         if (loose.length) {
-            html += '<h3>Neroztříděné streamy</h3>' + renderSearchStreamTable(loose, "loose");
+            html += '<h3>Neroztříděné streamy</h3>' + renderSearchStreamTable(loose, "loose", "search");
         }
         return html;
     }
 
-    function renderSearchStreamTable(streams, scope) {
+    function renderSearchStreamTable(streams, scope, mode) {
         var normalizedEntries = streams.map(function (entry, position) {
             if (entry && entry.stream) return entry;
             return { stream: entry, index: position };
         });
+        mode = mode || "search";
         var scopeSuffix = scope ? "-" + scope : "";
         var streamValues = normalizedEntries.map(function (entry) { return entry.stream; });
         var originalCount = normalizedEntries.length;
         var formats = uniqueStreamValues(streamValues, "format");
         var providers = uniqueStreamValues(streamValues, "provider");
-        var entries = filteredSearchEntries(normalizedEntries);
-        var filterAttrs = scope ? ' data-filter-scope="' + escapeHtml(scope) + '"' : "";
+        var state = tableState(mode);
+        var filters = state.filters;
+        var entries = filteredSearchEntries(normalizedEntries, mode);
+        var idPrefix = mode === "refresh" ? "refresh" : "search";
+        var filterAttrs = ' data-filter-mode="' + escapeHtml(mode) + '"' + (scope ? ' data-filter-scope="' + escapeHtml(scope) + '"' : "");
 
         var html = '<div class="search-table-wrap"><table class="search-results-table">';
         html += '<thead>';
         html += '<tr>' +
-            '<th class="check-col">' + searchSortButton("selected", "") + '</th>' +
-            '<th>' + searchSortButton("provider", "Zdroj") + '</th>' +
-            '<th>' + searchSortButton("filename", "Název") + '</th>' +
-            '<th>' + searchSortButton("format", "Formát") + '</th>' +
-            '<th>' + searchSortButton("size", "Velikost") + '</th>' +
-            '<th>' + searchSortButton("resolution", "Rozlišení") + '</th>' +
-            '<th>' + searchSortButton("duration", "Délka") + '</th>' +
+            '<th class="check-col">' + searchSortButton("selected", "", mode) + '</th>' +
+            '<th>' + searchSortButton("provider", "Zdroj", mode) + '</th>' +
+            '<th>' + searchSortButton("filename", "Název", mode) + '</th>' +
+            '<th>' + searchSortButton("format", "Formát", mode) + '</th>' +
+            '<th>' + searchSortButton("size", "Velikost", mode) + '</th>' +
+            '<th>' + searchSortButton("resolution", "Rozlišení", mode) + '</th>' +
+            '<th>' + searchSortButton("duration", "Délka", mode) + '</th>' +
             '<th>Akce</th>' +
             '</tr>';
         html += '<tr class="filter-row">' +
             '<th></th>' +
-            '<th><select id="searchFilterProvider' + scopeSuffix + '" data-search-filter="provider"' + filterAttrs + '><option value="">Vše</option>' + providers.map(function (provider) {
-                return '<option value="' + escapeHtml(provider) + '"' + (searchFilters.provider === provider ? " selected" : "") + '>' + escapeHtml(provider) + '</option>';
+            '<th><select id="' + idPrefix + 'FilterProvider' + scopeSuffix + '" data-search-filter="provider"' + filterAttrs + '><option value="">Vše</option>' + providers.map(function (provider) {
+                return '<option value="' + escapeHtml(provider) + '"' + (filters.provider === provider ? " selected" : "") + '>' + escapeHtml(provider) + '</option>';
             }).join("") + '</select></th>' +
-            '<th><input id="searchFilterText' + scopeSuffix + '" data-search-filter="text"' + filterAttrs + ' value="' + escapeHtml(searchFilters.text) + '" placeholder="Filtrovat název"></th>' +
-            '<th><select id="searchFilterFormat' + scopeSuffix + '" data-search-filter="format"' + filterAttrs + '><option value="">Vše</option>' + formats.map(function (format) {
-                return '<option value="' + escapeHtml(format) + '"' + (searchFilters.format === format ? " selected" : "") + '>' + escapeHtml(format) + '</option>';
+            '<th><input id="' + idPrefix + 'FilterText' + scopeSuffix + '" data-search-filter="text"' + filterAttrs + ' value="' + escapeHtml(filters.text) + '" placeholder="Filtrovat název"></th>' +
+            '<th><select id="' + idPrefix + 'FilterFormat' + scopeSuffix + '" data-search-filter="format"' + filterAttrs + '><option value="">Vše</option>' + formats.map(function (format) {
+                return '<option value="' + escapeHtml(format) + '"' + (filters.format === format ? " selected" : "") + '>' + escapeHtml(format) + '</option>';
             }).join("") + '</select></th>' +
-            '<th><div class="size-filter"><input id="searchFilterMinSize' + scopeSuffix + '" data-search-filter="minSize"' + filterAttrs + ' value="' + escapeHtml(searchFilters.minSize) + '" placeholder="min GB"><input id="searchFilterMaxSize' + scopeSuffix + '" data-search-filter="maxSize"' + filterAttrs + ' value="' + escapeHtml(searchFilters.maxSize) + '" placeholder="max GB"></div></th>' +
+            '<th><div class="size-filter"><input id="' + idPrefix + 'FilterMinSize' + scopeSuffix + '" data-search-filter="minSize"' + filterAttrs + ' value="' + escapeHtml(filters.minSize) + '" placeholder="min GB"><input id="' + idPrefix + 'FilterMaxSize' + scopeSuffix + '" data-search-filter="maxSize"' + filterAttrs + ' value="' + escapeHtml(filters.maxSize) + '" placeholder="max GB"></div></th>' +
             '<th></th>' +
             '<th></th>' +
             '<th><span class="result-count">' + entries.length + "/" + originalCount + '</span></th>' +
@@ -1052,10 +1074,9 @@
     }
 
     function renderRefreshStreams(mediaType, streams) {
+        resetRefreshTableState();
         if (mediaType === "tvshow") return renderRefreshSeriesTables(streams);
-        return renderRefreshStreamTable(streams.map(function (stream, index) {
-            return { stream: stream, index: index };
-        }));
+        return renderSearchStreamTable(streams, "refresh", "refresh");
     }
 
     function renderRefreshSeriesTables(streams) {
@@ -1074,39 +1095,20 @@
             }
         }
         seasons = Object.keys(grouped).sort(function (a, b) { return Number(a) - Number(b); });
-        if (!seasons.length) return '<h3>Neroztříděné streamy</h3>' + renderRefreshStreamTable(loose);
+        if (!seasons.length) return '<h3>Neroztříděné streamy</h3>' + renderSearchStreamTable(loose, "refresh-loose", "refresh");
         for (var s = 0; s < seasons.length; s += 1) {
             var season = seasons[s];
             var episodes = Object.keys(grouped[season]).sort(function (a, b) { return Number(a) - Number(b); });
             html += '<details open><summary>Série ' + escapeHtml(season) + '</summary>';
             for (var e = 0; e < episodes.length; e += 1) {
                 var episode = episodes[e];
-                html += '<div class="episode-block"><h4>Díl ' + escapeHtml(episode) + '</h4>' + renderRefreshStreamTable(grouped[season][episode]) + '</div>';
+                html += '<div class="episode-block"><h4>Díl ' + escapeHtml(episode) + '</h4>' + renderSearchStreamTable(grouped[season][episode], "refresh-s" + season + "e" + episode, "refresh") + '</div>';
             }
             html += '</details>';
         }
         html += '</div>';
-        if (loose.length) html += '<h3>Neroztříděné streamy</h3>' + renderRefreshStreamTable(loose);
+        if (loose.length) html += '<h3>Neroztříděné streamy</h3>' + renderSearchStreamTable(loose, "refresh-loose", "refresh");
         return html;
-    }
-
-    function renderRefreshStreamTable(entries) {
-        var html = '<div class="search-table-wrap"><table class="search-results-table"><thead><tr><th class="check-col"></th><th>Zdroj</th><th>Název</th><th>Formát</th><th>Velikost</th><th>Rozlišení</th><th>Délka</th><th>Akce</th></tr></thead><tbody>';
-        html += entries.map(function (entry) {
-            var stream = entry.stream;
-            var season = stream.season && stream.episode ? '<span class="episode-badge">S' + stream.season + ' E' + stream.episode + '</span>' : "";
-            return '<tr class="selectable-row" data-toggle-search-index="' + entry.index + '">' +
-                '<td class="check-col"><input type="checkbox" class="search-stream-check" data-index="' + entry.index + '"></td>' +
-                '<td>' + providerBadge(stream.provider) + '</td>' +
-                '<td><strong>' + escapeHtml(stream.filename) + '</strong> ' + season + '</td>' +
-                '<td>' + escapeHtml(stream.format || "-") + '</td>' +
-                '<td class="numeric-cell">' + formatBytes(stream.size) + '</td>' +
-                '<td>' + escapeHtml(streamResolution(stream)) + '</td>' +
-                '<td class="numeric-cell">' + formatDuration(stream.duration) + '</td>' +
-                '<td><button type="button" class="play-button compact-button" data-action="play-stream" data-ident="' + escapeHtml(streamIdent(stream)) + '" data-source-url="' + escapeHtml(stream.stream_url || "") + '" data-title="' + escapeHtml(stream.filename) + '">Přehrát</button></td>' +
-                '</tr>';
-        }).join("");
-        return html + '</tbody></table></div>';
     }
 
     function refreshMedia(mediaId) {
@@ -1236,9 +1238,9 @@
 
         if (action === "detail") showDetail(id);
         if (action === "save-selected") saveSelectedStreams();
-        if (action === "sort-search") {
+        if (action === "sort-stream-table") {
             event.preventDefault();
-            sortSearchResults(target.getAttribute("data-key"));
+            sortStreamTable(target.getAttribute("data-key"), target.getAttribute("data-mode") || "search");
         }
         if (action === "check-media") checkMediaStreams(id);
         if (action === "refresh-media") refreshMedia(id);
@@ -1258,23 +1260,34 @@
         if (action === "fullscreen-player") fullscreenPlayer();
     }
 
-    function sortSearchResults(key) {
+    function sortStreamTable(key, mode) {
+        var state = tableState(mode);
         if (!key || key === "selected") return;
-        if (searchSort.key === key) {
-            searchSort.direction = searchSort.direction === "asc" ? "desc" : "asc";
+        if (state.sort.key === key) {
+            state.sort.direction = state.sort.direction === "asc" ? "desc" : "asc";
         } else {
-            searchSort.key = key;
-            searchSort.direction = key === "size" || key === "resolution" || key === "duration" ? "desc" : "asc";
+            state.sort.key = key;
+            state.sort.direction = key === "size" || key === "resolution" || key === "duration" ? "desc" : "asc";
+        }
+        rerenderStreamTable(mode);
+    }
+
+    function rerenderStreamTable(mode) {
+        if (mode === "refresh") {
+            renderRefreshPanel(currentRefresh || { new_streams: [] });
+            return;
         }
         renderSearchResults();
     }
 
     function refreshSearchAfterFilter(inputId, scope) {
+        var node = el(inputId);
+        var mode = node && node.getAttribute ? (node.getAttribute("data-filter-mode") || "search") : "search";
         var selector = scope ? '[data-filter-scope="' + scope + '"]' : "";
-        var node = scope ? document.querySelector("#" + inputId + selector) : el(inputId);
+        node = scope ? document.querySelector("#" + inputId + selector) : el(inputId);
         var start = node && typeof node.selectionStart === "number" ? node.selectionStart : null;
         var end = node && typeof node.selectionEnd === "number" ? node.selectionEnd : null;
-        renderSearchResults();
+        rerenderStreamTable(mode);
         node = scope ? document.querySelector("#" + inputId + selector) : el(inputId);
         if (!node) return;
         node.focus();
@@ -1395,13 +1408,13 @@
                 }
             }
             if (event.target && event.target.getAttribute && event.target.getAttribute("data-search-filter")) {
-                updateSearchFilter(event.target.id, event.target.getAttribute("data-search-filter"));
+                updateSearchFilter(event.target.id, event.target.getAttribute("data-search-filter"), event.target.getAttribute("data-filter-mode") || "search");
                 refreshSearchAfterFilter(event.target.id, event.target.getAttribute("data-filter-scope"));
             }
         });
         document.addEventListener("input", function (event) {
             if (event.target && event.target.getAttribute && event.target.getAttribute("data-search-filter")) {
-                updateSearchFilter(event.target.id, event.target.getAttribute("data-search-filter"));
+                updateSearchFilter(event.target.id, event.target.getAttribute("data-search-filter"), event.target.getAttribute("data-filter-mode") || "search");
                 refreshSearchAfterFilter(event.target.id, event.target.getAttribute("data-filter-scope"));
             }
         });
