@@ -2,6 +2,12 @@
 
 Všechny důležité změny add-onu StreamCinema API jsou vedené v tomto souboru.
 
+## 0.3.18
+
+- U každého streamu je nově tlačítko `Stáhnout`.
+- Stažení používá stejný backend resolver/proxy link jako přehrávání, takže funguje jednotně pro Webshare i Fastshare.
+- Tlačítko je dostupné ve vyhledávání, aktualizační nabídce i ve sbírce.
+
 ## 0.3.17
 
 - Nové streamy nabídnuté po aktualizaci mají stejné třídění a filtrování jako výsledky vyhledávání.

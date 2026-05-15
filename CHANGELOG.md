@@ -2,6 +2,12 @@
 
 This file is intentionally duplicated at the repository root for Home Assistant compatibility. The add-on changelog source is `streamcinema/CHANGELOG.md`.
 
+## 0.3.18
+
+- Every stream now has a `Stáhnout` button.
+- Downloads use the same backend resolver/proxy link as playback, so Webshare and Fastshare behave consistently.
+- The button is available in search results, refresh offers, and collection details.
+
 ## 0.3.17
 
 - New streams offered after refresh now have the same sorting and filtering table as search results.

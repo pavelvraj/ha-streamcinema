@@ -67,6 +67,10 @@ button.play-button {
     background: var(--accent-2);
 }
 
+button.download-button {
+    background: #52616f;
+}
+
 button.compact-button {
     padding: 6px 9px;
     font-size: 13px;
@@ -335,11 +339,16 @@ textarea {
 
 .stream-actions,
 .detail-actions,
-.row-actions {
+.row-actions,
+.table-actions {
     display: flex;
     align-items: center;
     gap: 8px;
     flex-wrap: wrap;
+}
+
+.table-actions {
+    gap: 5px;
 }
 
 .stream-actions {

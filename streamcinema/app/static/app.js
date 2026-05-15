@@ -273,6 +273,13 @@
         return (stream.provider || "") + ":" + (stream.provider_ident || stream.ident || "");
     }
 
+    function streamActionButtons(stream, compact) {
+        var classes = compact ? " compact-button" : "";
+        return '' +
+            '<button type="button" class="play-button' + classes + '" data-action="play-stream" data-ident="' + escapeHtml(streamIdent(stream)) + '" data-source-url="' + escapeHtml(stream.stream_url || "") + '" data-title="' + escapeHtml(stream.filename) + '">Přehrát</button>' +
+            '<button type="button" class="download-button' + classes + '" data-action="download-stream" data-ident="' + escapeHtml(streamIdent(stream)) + '" data-source-url="' + escapeHtml(stream.stream_url || "") + '" data-title="' + escapeHtml(stream.filename) + '">Stáhnout</button>';
+    }
+
     function resetSearchTableState() {
         searchSort = { key: "size", direction: "desc" };
         searchFilters = { provider: "", format: "", text: "", minSize: "", maxSize: "" };
@@ -684,7 +691,7 @@
                     '<td class="numeric-cell" data-sort-value="' + Number(stream.size || 0) + '">' + formatBytes(stream.size) + '</td>' +
                     '<td>' + escapeHtml(streamResolution(stream)) + '</td>' +
                     '<td class="numeric-cell">' + formatDuration(stream.duration) + '</td>' +
-                    '<td><button type="button" class="play-button compact-button" data-action="play-stream" data-ident="' + escapeHtml(streamIdent(stream)) + '" data-source-url="' + escapeHtml(stream.stream_url || "") + '" data-title="' + escapeHtml(stream.filename) + '">Přehrát</button></td>' +
+                    '<td><div class="table-actions">' + streamActionButtons(stream, true) + '</div></td>' +
                     '</tr>';
             }).join("");
         }
@@ -865,7 +872,7 @@
                         '<span>' + (stream.last_checked_at ? "Kontrola " + escapeHtml(stream.last_checked_at) : "Zatím bez kontroly") + '</span>' +
                     '</div>' +
                     '<div class="row-actions">' +
-                        '<button type="button" class="play-button" data-action="play-stream" data-ident="' + escapeHtml(stream.ident) + '" data-source-url="' + escapeHtml(stream.stream_url || "") + '" data-title="' + escapeHtml(stream.filename) + '">Přehrát</button>' +
+                        streamActionButtons(stream, false) +
                         '<button type="button" data-action="check-stream" data-id="' + stream.id + '">Kontrola</button>' +
                         '<button type="button" class="danger" data-action="delete-stream" data-id="' + stream.id + '">Vyřadit</button>' +
                     '</div>' +
@@ -937,6 +944,43 @@
             .catch(function (error) {
                 console.error(error);
                 showStatus("Nepodařilo se získat stream link.", "error");
+            });
+    }
+
+    function resolveStreamLink(ident, sourceUrl) {
+        if (!ident || ident.indexOf(":") < 1) {
+            return Promise.reject(new Error("Stream nemá identifikátor."));
+        }
+        var parts = ident.split(":");
+        var provider = parts.shift();
+        var fileIdent = parts.join(":");
+        return requestJson(API_URL + "/file_link/" + encodeURIComponent(provider) + ":" + encodeURIComponent(fileIdent))
+            .then(function (data) {
+                if (!data.link) throw new Error("Provider nevrátil přímý stream link.");
+                if (sourceUrl && data.link.indexOf("api/stream_proxy/") === 0) {
+                    data.link += "?url=" + encodeURIComponent(sourceUrl);
+                }
+                return data.link;
+            });
+    }
+
+    function downloadStream(ident, title, sourceUrl) {
+        showStatus("Připravuji odkaz ke stažení...", "info");
+        resolveStreamLink(ident, sourceUrl)
+            .then(function (link) {
+                var anchor = document.createElement("a");
+                anchor.href = link;
+                anchor.target = "_blank";
+                anchor.rel = "noreferrer";
+                anchor.download = title || "";
+                document.body.appendChild(anchor);
+                anchor.click();
+                document.body.removeChild(anchor);
+                showStatus("Odkaz ke stažení byl otevřen.", "success");
+            })
+            .catch(function (error) {
+                console.error(error);
+                showStatus(errorMessage(error, "Nepodařilo se získat odkaz ke stažení."), "error");
             });
     }
 
@@ -1255,6 +1299,10 @@
         if (action === "play-stream") {
             event.preventDefault();
             playStream(target.getAttribute("data-ident"), target.getAttribute("data-title"), target.getAttribute("data-source-url"));
+        }
+        if (action === "download-stream") {
+            event.preventDefault();
+            downloadStream(target.getAttribute("data-ident"), target.getAttribute("data-title"), target.getAttribute("data-source-url"));
         }
         if (action === "close-player") closePlayer();
         if (action === "fullscreen-player") fullscreenPlayer();
