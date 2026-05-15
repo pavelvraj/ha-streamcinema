@@ -1118,7 +1118,6 @@
     }
 
     function renderRefreshStreams(mediaType, streams) {
-        resetRefreshTableState();
         if (mediaType === "tvshow") return renderRefreshSeriesTables(streams);
         return renderSearchStreamTable(streams, "refresh", "refresh");
     }
@@ -1166,6 +1165,7 @@
         ]);
         requestJson(API_URL + "/media/" + encodeURIComponent(mediaId) + "/refresh", { method: "POST" })
             .then(function (result) {
+                resetRefreshTableState();
                 showStatus("Aktualizace dokončena: zachováno " + Number(result.kept || 0) + ", vyřazeno " + Number(result.removed || 0) + ", nové " + (result.new_streams || []).length + ".", "success");
                 return loadCatalog().then(function () {
                     return showDetail(mediaId).then(function () {

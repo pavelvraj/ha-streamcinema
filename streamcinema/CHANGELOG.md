@@ -2,6 +2,11 @@
 
 Všechny důležité změny add-onu StreamCinema API jsou vedené v tomto souboru.
 
+## 0.3.19
+
+- Opraveno zadávání hodnot do filtrů velikosti v aktualizační tabulce.
+- Stav filtrů a řazení aktualizační nabídky se už neresetuje při každém překreslení tabulky, ale jen po nové aktualizaci.
+
 ## 0.3.18
 
 - U každého streamu je nově tlačítko `Stáhnout`.

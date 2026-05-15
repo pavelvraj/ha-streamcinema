@@ -2,6 +2,11 @@
 
 This file is intentionally duplicated at the repository root for Home Assistant compatibility. The add-on changelog source is `streamcinema/CHANGELOG.md`.
 
+## 0.3.19
+
+- Fixed typing values into size filters in the refresh table.
+- Refresh offer filters and sorting are no longer reset on every table rerender, only after a new refresh.
+
 ## 0.3.18
 
 - Every stream now has a `Stáhnout` button.
