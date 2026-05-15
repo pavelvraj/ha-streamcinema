@@ -2,6 +2,12 @@
 
 Všechny důležité změny add-onu StreamCinema API jsou vedené v tomto souboru.
 
+## 0.3.20
+
+- Výběr žánrů ve vyhledávání i editaci je nově kompaktní chip seznam místo vysokého multi-select pole.
+- Blok žánrů má omezenou výšku a vlastní scrollování, takže nerozbíjí rozložení stránky.
+- Po zařazení vybraných streamů do sbírky se výsledky vyhledávání vyčistí a panel se schová.
+
 ## 0.3.19
 
 - Opraveno zadávání hodnot do filtrů velikosti v aktualizační tabulce.

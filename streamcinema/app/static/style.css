@@ -530,13 +530,46 @@ textarea {
     font-size: 13px;
 }
 
-.genre-select {
-    min-height: 140px;
+.genre-picker {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    max-height: 92px;
+    overflow-y: auto;
+    padding: 8px;
+    background: #0d0f12;
+    border: 1px solid var(--line);
+    border-radius: 6px;
 }
 
-.field-help {
+.genre-option {
+    display: inline-flex;
+    align-items: center;
+    cursor: pointer;
+}
+
+.genre-option input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.genre-option span {
+    border-radius: 999px;
+    background: #15181c;
+    border: 1px solid var(--line);
     color: var(--muted);
     font-size: 12px;
+    font-weight: 700;
+    line-height: 1.3;
+    padding: 5px 9px;
+}
+
+.genre-option input:checked + span {
+    background: #1f3b45;
+    border-color: #2e5d6b;
+    color: #dff7ff;
 }
 
 .edit-form button {

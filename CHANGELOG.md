@@ -2,6 +2,12 @@
 
 This file is intentionally duplicated at the repository root for Home Assistant compatibility. The add-on changelog source is `streamcinema/CHANGELOG.md`.
 
+## 0.3.20
+
+- Genre selection in search and edit forms now uses a compact chip list instead of a tall multi-select box.
+- The genre block has a limited height and its own scrolling, so it no longer breaks the page layout.
+- Search results are cleared and hidden after selected streams are added to the collection.
+
 ## 0.3.19
 
 - Fixed typing values into size filters in the refresh table.

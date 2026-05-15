@@ -139,11 +139,10 @@
     }
 
     function selectedGenresFromControl(id) {
-        var node = el(id);
+        var nodes = document.querySelectorAll('[data-genre-target="' + id + '"]:checked');
         var values = [];
-        if (!node) return values;
-        for (var i = 0; i < node.options.length; i += 1) {
-            if (node.options[i].selected) values.push(node.options[i].value);
+        for (var i = 0; i < nodes.length; i += 1) {
+            values.push(nodes[i].value);
         }
         return cleanGenres(values);
     }
@@ -152,11 +151,14 @@
         selected = cleanGenres(selected || []);
         var lookup = {};
         for (var i = 0; i < selected.length; i += 1) lookup[selected[i]] = true;
-        return '<select id="' + escapeHtml(id) + '" class="genre-select" multiple size="6">' +
+        return '<div id="' + escapeHtml(id) + '" class="genre-picker">' +
             GENRE_OPTIONS.map(function (genre) {
-                return '<option value="' + escapeHtml(genre) + '"' + (lookup[genre] ? " selected" : "") + '>' + escapeHtml(genre) + '</option>';
+                return '<label class="genre-option ' + (lookup[genre] ? "active" : "") + '">' +
+                    '<input type="checkbox" data-genre-target="' + escapeHtml(id) + '" value="' + escapeHtml(genre) + '"' + (lookup[genre] ? " checked" : "") + '>' +
+                    '<span>' + escapeHtml(genre) + '</span>' +
+                '</label>';
             }).join("") +
-            '</select><span class="field-help">Podrž Ctrl nebo Shift pro výběr více žánrů.</span>';
+            '</div>';
     }
 
     function streamStats(streams) {
@@ -728,7 +730,13 @@
             body: JSON.stringify({ metadata: currentSearch.metadata, streams: streams }),
         })
             .then(function (media) {
+                var panel = el("searchPanel");
                 selectedMediaId = media._id;
+                currentSearch = null;
+                if (panel) {
+                    panel.innerHTML = "";
+                    panel.classList.add("hidden");
+                }
                 showStatus("Vybrané streamy byly zařazeny do sbírky.", "success");
                 return loadCatalog().then(function () {
                     switchTab("collectionTab");
@@ -1446,6 +1454,10 @@
             });
         }
         document.addEventListener("change", function (event) {
+            if (event.target && event.target.getAttribute && event.target.getAttribute("data-genre-target")) {
+                var label = event.target.parentNode;
+                if (label) label.className = event.target.checked ? "genre-option active" : "genre-option";
+            }
             if (event.target && event.target.id === "selectAllStreams") {
                 toggleSearchStreams(event.target.checked);
             }
