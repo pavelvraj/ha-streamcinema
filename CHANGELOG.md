@@ -2,6 +2,13 @@
 
 This file is intentionally duplicated at the repository root for Home Assistant compatibility. The add-on changelog source is `streamcinema/CHANGELOG.md`.
 
+## 0.3.16
+
+- Search and refresh now show a prominent progress panel with a spinner, elapsed time, and concrete current steps.
+- Completed searches show stream/provider counts and TV show season/episode counts.
+- New streams found by TV show refresh are grouped by seasons and episodes again.
+- Genre editing now uses a fixed multi-select list instead of free text.
+
 ## 0.3.15
 
 - The edit form can now change title, genres, and the stored search query.

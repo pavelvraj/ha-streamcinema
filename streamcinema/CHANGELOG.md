@@ -2,6 +2,13 @@
 
 Všechny důležité změny add-onu StreamCinema API jsou vedené v tomto souboru.
 
+## 0.3.16
+
+- Vyhledávání a aktualizace zobrazují výrazný průběhový panel se spinnerem, běžícím časem a konkrétními kroky.
+- Po dokončení hledání se zobrazí souhrn počtu streamů, zdrojů a u seriálů také sérií a dílů.
+- Nové streamy nalezené aktualizací seriálu se znovu rozdělují podle sérií a dílů.
+- Výběr žánrů je nově pevný vícenásobný seznam místo ručního textového pole.
+
 ## 0.3.15
 
 - V části `Upravit položku` lze měnit název, žánry a uložený vyhledávací dotaz.

@@ -365,6 +365,70 @@ textarea {
     margin-top: 16px;
 }
 
+.operation-progress {
+    display: grid;
+    grid-template-columns: 34px minmax(0, 1fr);
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 14px;
+    padding: 12px;
+    background: #121f23;
+    border: 1px solid #284954;
+    border-radius: 8px;
+}
+
+.operation-progress.done {
+    background: #142822;
+    border-color: var(--accent);
+}
+
+.progress-spinner {
+    width: 28px;
+    height: 28px;
+    border: 3px solid #2e5d6b;
+    border-top-color: #7dd3fc;
+    border-radius: 999px;
+    animation: spin 0.9s linear infinite;
+}
+
+.operation-progress.done .progress-spinner {
+    animation: none;
+    border-color: var(--accent);
+    border-top-color: var(--accent);
+}
+
+.operation-progress p {
+    margin: 3px 0 0;
+    color: var(--muted);
+}
+
+.progress-stats {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 8px;
+}
+
+.progress-stats span {
+    border-radius: 999px;
+    background: #0d0f12;
+    border: 1px solid var(--line);
+    color: var(--muted);
+    padding: 3px 8px;
+    font-size: 12px;
+}
+
+.series-summary {
+    color: var(--muted);
+    margin: 0 0 10px;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
 .refresh-summary,
 .search-query-note,
 .muted-inline {
@@ -455,6 +519,15 @@ textarea {
     gap: 6px;
     color: var(--muted);
     font-size: 13px;
+}
+
+.genre-select {
+    min-height: 140px;
+}
+
+.field-help {
+    color: var(--muted);
+    font-size: 12px;
 }
 
 .edit-form button {
