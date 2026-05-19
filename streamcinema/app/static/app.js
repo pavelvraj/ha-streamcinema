@@ -3,6 +3,8 @@
     var catalogItems = [];
     var currentSearch = null;
     var currentSearchController = null;
+    var currentSearchJobId = null;
+    var currentSearchPollTimer = null;
     var currentRefresh = null;
     var sourceStatus = { can_search: true, message: "" };
     var selectedMediaId = null;
@@ -238,6 +240,13 @@
         activeProgressMode = "";
     }
 
+    function stopSearchPolling() {
+        if (currentSearchPollTimer) {
+            window.clearTimeout(currentSearchPollTimer);
+            currentSearchPollTimer = null;
+        }
+    }
+
     function renderOperationSummary(containerId, label, details, streams, ignoredStreams) {
         var container = el(containerId);
         if (!container) return;
@@ -252,6 +261,96 @@
         activeProgressMode = "";
         container.classList.remove("hidden");
         container.innerHTML = renderProgress(label, details, stats, false);
+    }
+
+    function renderSearchJobProgress(job, label) {
+        var container = el("searchProgress");
+        if (!container) return;
+        container.classList.remove("hidden");
+        container.innerHTML = renderProgress(label || "Vyhledávání běží", job.step || "Pracuji...", {
+            items: job.items || 0,
+            streams: job.streams || 0,
+            ignored: job.ignored || 0,
+            elapsed: job.elapsed || 0,
+        }, true);
+    }
+
+    function finishSearchFromJob(job) {
+        var data = job.result || {};
+        resetSearchTableState();
+        currentSearch = data;
+        currentSearchJobId = null;
+        stopSearchPolling();
+        renderSearchResults();
+        renderOperationSummary("searchProgress", "Vyhledávání dokončeno", "Výsledky jsou připravené k filtrování, řazení a výběru.", data.streams || [], data.ignored_streams || []);
+        showStatus("Vyhledávání dokončeno: " + (data.streams || []).length + " streamů, vyfiltrováno " + (data.ignored_streams || []).length + ".", "success");
+        setSearching(false);
+    }
+
+    function failSearchFromJob(job) {
+        var message = job.error || "Zkontroluj log add-onu.";
+        currentSearchJobId = null;
+        stopSearchPolling();
+        stopProgress();
+        if (job.result && job.result.metadata) {
+            currentSearch = job.result;
+            renderSearchResults();
+            renderOperationSummary("searchProgress", "Vyhledávání skončilo chybou", "Zobrazuji dostupné výsledky. Chyba: " + message, job.result.streams || [], job.result.ignored_streams || []);
+        } else {
+            var failedPanel = el("searchPanel");
+            if (failedPanel) {
+                failedPanel.classList.remove("hidden");
+                failedPanel.innerHTML = '<div class="empty-list">Vyhledávání skončilo chybou dřív, než server vrátil výsledky. Není tedy co zobrazit.</div>';
+            }
+        }
+        showStatus("Vyhledávání selhalo: " + message, "error");
+        setSearching(false);
+    }
+
+    function pollSearchJob(jobId) {
+        requestJson(API_URL + "/search_jobs/" + encodeURIComponent(jobId))
+            .then(function (job) {
+                if (jobId !== currentSearchJobId) return;
+                if (job.status === "done") {
+                    finishSearchFromJob(job);
+                    return;
+                }
+                if (job.status === "cancelled") {
+                    currentSearchJobId = null;
+                    stopSearchPolling();
+                    stopProgress();
+                    setSearching(false);
+                    showStatus("Hledání bylo zastaveno.", "info");
+                    return;
+                }
+                if (job.status === "error") {
+                    failSearchFromJob(job);
+                    return;
+                }
+                renderSearchJobProgress(job, "Vyhledávání běží");
+                currentSearchPollTimer = window.setTimeout(function () {
+                    pollSearchJob(jobId);
+                }, 1000);
+            })
+            .catch(function (error) {
+                console.error(error);
+                if (jobId !== currentSearchJobId) return;
+                stopSearchPolling();
+                stopProgress();
+                if (currentSearch && currentSearch.metadata) {
+                    renderSearchResults();
+                    renderOperationSummary("searchProgress", "Vyhledávání skončilo chybou", "Zobrazuji poslední dostupné výsledky. Chyba: " + errorMessage(error, "neznámá chyba"), currentSearch.streams || [], currentSearch.ignored_streams || []);
+                } else {
+                    var failedPanel = el("searchPanel");
+                    if (failedPanel) {
+                        failedPanel.classList.remove("hidden");
+                        failedPanel.innerHTML = '<div class="empty-list">Spojení s průběhem hledání selhalo dřív, než se podařilo načíst výsledky.</div>';
+                    }
+                }
+                currentSearchJobId = null;
+                showStatus("Vyhledávání selhalo: " + errorMessage(error, "Zkontroluj log add-onu."), "error");
+                setSearching(false);
+            });
     }
 
     function parseGenreInput(value) {
@@ -532,54 +631,49 @@
             return;
         }
 
+        stopSearchPolling();
         setSearching(true);
+        currentSearch = null;
+        currentSearchJobId = null;
         showIgnoredStreams = false;
         showStatus("Vyhledávám streamy a metadata...", "info");
         if (panel) {
             panel.classList.remove("hidden");
             panel.innerHTML = '<div id="searchProgress"></div>';
         }
-        if (window.AbortController) {
-            currentSearchController = new AbortController();
-        } else {
-            currentSearchController = null;
-        }
-        startProgress("searchProgress", "Vyhledávání běží", [
-            "Získávám metadata filmu nebo seriálu",
-            "Prohledávám povolené zdroje",
-            "Filtruji názvy podle zadaného textu",
-            mediaType === "tvshow" ? "Rozděluji nalezené streamy na série a díly" : "Počítám velikosti a formáty streamů",
-        ], "search");
+        currentSearchController = null;
+        stopProgress();
+        activeProgressMode = "search";
+        activeProgressStarted = Date.now();
+        renderSearchJobProgress({
+            items: 0,
+            streams: 0,
+            ignored: 0,
+            elapsed: 0,
+            step: "Získávám metadata filmu nebo seriálu",
+        }, "Vyhledávání běží");
 
-        requestJson(API_URL + "/search_json?q=" + encodeURIComponent(query) + "&media_type=" + encodeURIComponent(mediaType), currentSearchController ? { signal: currentSearchController.signal } : {})
-            .then(function (data) {
-                resetSearchTableState();
-                currentSearch = data;
-                currentSearchController = null;
-                renderSearchResults();
-                renderOperationSummary("searchProgress", "Vyhledávání dokončeno", "Výsledky jsou připravené k filtrování, řazení a výběru.", data.streams || [], data.ignored_streams || []);
-                showStatus("Vyhledávání dokončeno: " + (data.streams || []).length + " streamů, vyfiltrováno " + (data.ignored_streams || []).length + ".", "success");
-                setSearching(false);
+        requestJson(API_URL + "/search_jobs?q=" + encodeURIComponent(query) + "&media_type=" + encodeURIComponent(mediaType), { method: "POST" })
+            .then(function (job) {
+                currentSearchJobId = job.id;
+                renderSearchJobProgress(job, "Vyhledávání běží");
+                pollSearchJob(job.id);
             })
             .catch(function (error) {
                 console.error(error);
+                currentSearchJobId = null;
                 stopProgress();
-                currentSearchController = null;
-                if (error && (error.name === "AbortError" || error.message === "Search stopped")) {
-                    showStatus("Hledání bylo zastaveno.", "info");
+                if (currentSearch && currentSearch.metadata) {
+                    renderSearchResults();
+                    renderOperationSummary("searchProgress", "Vyhledávání skončilo chybou", "Zobrazuji poslední dostupné výsledky. Chyba: " + errorMessage(error, "neznámá chyba"), currentSearch.streams || [], currentSearch.ignored_streams || []);
                 } else {
-                    if (currentSearch && currentSearch.metadata) {
-                        renderSearchResults();
-                        renderOperationSummary("searchProgress", "Vyhledávání skončilo chybou", "Zobrazuji poslední dostupné výsledky. Chyba: " + errorMessage(error, "neznámá chyba"), currentSearch.streams || [], currentSearch.ignored_streams || []);
-                    } else {
-                        var failedPanel = el("searchPanel");
-                        if (failedPanel) {
-                            failedPanel.classList.remove("hidden");
-                            failedPanel.innerHTML = '<div class="empty-list">Vyhledávání skončilo chybou dřív, než server vrátil výsledky. Není tedy co zobrazit.</div>';
-                        }
+                    var failedPanel = el("searchPanel");
+                    if (failedPanel) {
+                        failedPanel.classList.remove("hidden");
+                        failedPanel.innerHTML = '<div class="empty-list">Vyhledávání skončilo chybou dřív, než server vrátil výsledky. Není tedy co zobrazit.</div>';
                     }
-                    showStatus("Vyhledávání selhalo: " + errorMessage(error, "Zkontroluj log add-onu."), "error");
                 }
+                showStatus("Vyhledávání selhalo: " + errorMessage(error, "Zkontroluj log add-onu."), "error");
                 setSearching(false);
             });
     }
@@ -587,10 +681,19 @@
     function stopSearch() {
         var panel = el("searchPanel");
         var input = el("searchInput");
+        var jobId = currentSearchJobId;
         if (currentSearchController) {
             currentSearchController.abort();
             currentSearchController = null;
         }
+        if (jobId) {
+            requestJson(API_URL + "/search_jobs/" + encodeURIComponent(jobId) + "/cancel", { method: "POST" })
+                .catch(function (error) {
+                    console.error(error);
+                });
+        }
+        currentSearchJobId = null;
+        stopSearchPolling();
         stopProgress();
         currentSearch = null;
         setSearching(false);

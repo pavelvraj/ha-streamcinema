@@ -2,6 +2,11 @@
 
 Všechny důležité změny add-onu StreamCinema API jsou vedené v tomto souboru.
 
+## 0.3.24
+
+- Vyhledávání nově běží jako backendový job a GUI si průběžně načítá aktuální počty během prohledávání zdrojů.
+- Řádek průběhu teď během hledání aktualizuje filmy/díly, streamy, vyfiltrované streamy, čas i aktuální krok/prohledávaný zdroj.
+
 ## 0.3.23
 
 - V hlavičce GUI se vedle textu `Katalog filmů, seriálů a streamů` zobrazuje aktuální verze add-onu.

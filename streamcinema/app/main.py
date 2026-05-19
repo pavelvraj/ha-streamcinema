@@ -2,7 +2,10 @@ import hashlib
 import json
 import os
 import re
+import threading
+import time
 import unicodedata
+import uuid
 from datetime import datetime
 from pathlib import Path
 from urllib.parse import unquote, urlparse
@@ -44,6 +47,8 @@ CSFD = CSFDScraper(config.get("csfd_api_url"))
 IMDB = IMDBScraper()
 
 app = FastAPI(title="StreamCinema API")
+SEARCH_JOBS = {}
+SEARCH_JOBS_LOCK = threading.Lock()
 
 
 @app.middleware("http")
@@ -313,7 +318,29 @@ def sort_streams(streams):
     )
 
 
-def search_provider_stream_sets(query, media_type="movie"):
+class SearchCancelled(Exception):
+    pass
+
+
+def stream_progress_stats(streams, ignored_streams, media_type="movie"):
+    episodes = set()
+    seasons = set()
+    for stream in streams or []:
+        season = stream.get("season")
+        episode = stream.get("episode")
+        if season and episode:
+            seasons.add(season)
+            episodes.add((season, episode))
+    return {
+        "items": len(episodes) if media_type == "tvshow" else (1 if streams else 0),
+        "streams": len(streams or []),
+        "ignored": len(ignored_streams or []),
+        "seasons": len(seasons),
+        "episodes": len(episodes),
+    }
+
+
+def search_provider_stream_sets(query, media_type="movie", progress_callback=None, cancel_check=None):
     queries = [query]
     if media_type == "tvshow":
         queries.extend(series_search_queries(query))
@@ -322,23 +349,42 @@ def search_provider_stream_sets(query, media_type="movie"):
     ignored_streams = []
     seen = set()
     for search_query in queries:
-        for item in search_provider_files(search_query):
-            provider = item.get("provider")
-            ident = item.get("ident")
-            if not provider or not ident or (provider, ident) in seen:
+        for source_name, scraper in enabled_sources():
+            if cancel_check and cancel_check():
+                raise SearchCancelled()
+            if progress_callback:
+                progress_callback(streams, ignored_streams, f"Prohledávám {source_name}: {search_query}")
+            try:
+                provider_items = scraper.search(search_query)
+            except Exception as exc:
+                print(f"{scraper.__class__.__name__} search failed: {exc}")
+                if progress_callback:
+                    progress_callback(streams, ignored_streams, f"{source_name} vrátil chybu, pokračuji dalším zdrojem")
                 continue
 
-            filename = item.get("name") or item.get("filename") or ""
-            stream = stream_from_provider_item(item)
-            if not stream_name_matches_query(filename, query):
-                stream["ignored"] = True
-                stream["ignored_reason"] = "Název neobsahuje všechny části původního dotazu."
-                ignored_streams.append(stream)
+            for item in provider_items:
+                if cancel_check and cancel_check():
+                    raise SearchCancelled()
+                provider = item.get("provider")
+                ident = item.get("ident")
+                if not provider or not ident or (provider, ident) in seen:
+                    continue
+
+                filename = item.get("name") or item.get("filename") or ""
+                stream = stream_from_provider_item(item)
+                if not stream_name_matches_query(filename, query):
+                    stream["ignored"] = True
+                    stream["ignored_reason"] = "Název neobsahuje všechny části původního dotazu."
+                    ignored_streams.append(stream)
+                    seen.add((provider, ident))
+                    if progress_callback:
+                        progress_callback(streams, ignored_streams, f"Filtruji výsledky ze zdroje {source_name}")
+                    continue
+
                 seen.add((provider, ident))
-                continue
-
-            seen.add((provider, ident))
-            streams.append(stream)
+                streams.append(stream)
+                if progress_callback:
+                    progress_callback(streams, ignored_streams, f"Zpracovávám výsledky ze zdroje {source_name}")
 
     return sort_streams(streams), sort_streams(ignored_streams)
 
@@ -364,6 +410,148 @@ def search_provider_files(query):
             print(f"{scraper.__class__.__name__} search failed: {exc}")
     return all_files
 
+
+def prune_search_jobs():
+    now = time.time()
+    with SEARCH_JOBS_LOCK:
+        stale_ids = [
+            job_id
+            for job_id, job in SEARCH_JOBS.items()
+            if now - job.get("updated_at", job.get("started_at", now)) > 3600
+        ]
+        for job_id in stale_ids:
+            SEARCH_JOBS.pop(job_id, None)
+
+
+def update_search_job(job_id, **fields):
+    with SEARCH_JOBS_LOCK:
+        job = SEARCH_JOBS.get(job_id)
+        if not job:
+            return
+        job.update(fields)
+        job["updated_at"] = time.time()
+
+
+def read_search_job(job_id):
+    with SEARCH_JOBS_LOCK:
+        job = SEARCH_JOBS.get(job_id)
+        return dict(job) if job else None
+
+
+def search_job_cancelled(job_id):
+    with SEARCH_JOBS_LOCK:
+        job = SEARCH_JOBS.get(job_id)
+        return bool(job and job.get("cancel_requested"))
+
+
+def search_job_response(job):
+    started = job.get("started_at") or time.time()
+    response = {
+        "id": job.get("id"),
+        "status": job.get("status"),
+        "step": job.get("step") or "",
+        "items": job.get("items", 0),
+        "streams": job.get("streams", 0),
+        "ignored": job.get("ignored", 0),
+        "seasons": job.get("seasons", 0),
+        "episodes": job.get("episodes", 0),
+        "elapsed": int(max(0, time.time() - started)),
+    }
+    if job.get("error"):
+        response["error"] = job.get("error")
+    if job.get("result") is not None:
+        response["result"] = job.get("result")
+    return response
+
+
+def run_search_job(job_id, query, media_type):
+    metadata = None
+    streams = []
+    ignored_streams = []
+
+    def publish(current_streams, current_ignored, step):
+        stats = stream_progress_stats(current_streams, current_ignored, media_type)
+        update_search_job(job_id, step=step, **stats)
+
+    try:
+        ensure_search_sources()
+        update_search_job(job_id, status="running", step="Získávám metadata filmu nebo seriálu")
+        metadata = metadata_for_query(query, media_type=media_type)
+        metadata["search_query"] = query
+        metadata["type"] = media_type
+        publish(streams, ignored_streams, "Metadata načtena, začínám prohledávat zdroje")
+        streams, ignored_streams = search_provider_stream_sets(
+            query,
+            media_type,
+            progress_callback=publish,
+            cancel_check=lambda: search_job_cancelled(job_id),
+        )
+        result = {
+            "metadata": metadata,
+            "streams": streams,
+            "ignored_streams": ignored_streams,
+            "totalCount": len(streams),
+            "ignoredCount": len(ignored_streams),
+            "enabled_sources": [name for name, _scraper in enabled_sources()],
+        }
+        stats = stream_progress_stats(streams, ignored_streams, media_type)
+        update_search_job(job_id, status="done", step="Výsledky jsou připravené", result=result, **stats)
+    except SearchCancelled:
+        partial = {
+            "metadata": metadata,
+            "streams": sort_streams(streams),
+            "ignored_streams": sort_streams(ignored_streams),
+            "totalCount": len(streams),
+            "ignoredCount": len(ignored_streams),
+            "enabled_sources": [name for name, _scraper in enabled_sources()],
+        } if metadata else None
+        stats = stream_progress_stats(streams, ignored_streams, media_type)
+        update_search_job(job_id, status="cancelled", step="Hledání bylo zastaveno", result=partial, **stats)
+    except HTTPException as exc:
+        update_search_job(job_id, status="error", step="Vyhledávání skončilo chybou", error=str(exc.detail))
+    except Exception as exc:
+        partial = {
+            "metadata": metadata,
+            "streams": sort_streams(streams),
+            "ignored_streams": sort_streams(ignored_streams),
+            "totalCount": len(streams),
+            "ignoredCount": len(ignored_streams),
+            "enabled_sources": [name for name, _scraper in enabled_sources()],
+        } if metadata else None
+        stats = stream_progress_stats(streams, ignored_streams, media_type)
+        update_search_job(
+            job_id,
+            status="error",
+            step="Vyhledávání skončilo chybou",
+            error=str(exc),
+            result=partial,
+            **stats,
+        )
+
+
+def create_search_job(query, media_type):
+    prune_search_jobs()
+    job_id = uuid.uuid4().hex
+    now = time.time()
+    with SEARCH_JOBS_LOCK:
+        SEARCH_JOBS[job_id] = {
+            "id": job_id,
+            "status": "queued",
+            "step": "Čekám na spuštění hledání",
+            "items": 0,
+            "streams": 0,
+            "ignored": 0,
+            "seasons": 0,
+            "episodes": 0,
+            "started_at": now,
+            "updated_at": now,
+            "cancel_requested": False,
+            "result": None,
+            "error": "",
+        }
+    thread = threading.Thread(target=run_search_job, args=(job_id, query, media_type), daemon=True)
+    thread.start()
+    return read_search_job(job_id)
 
 def upsert_media(conn, metadata, selected_streams):
     media_type = infer_media_type(selected_streams, metadata)
@@ -694,7 +882,7 @@ def render_search_page(result):
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Stream Cinema - výsledky</title>
-        <link rel="stylesheet" href="../static/style.css?v=0.3.23">
+        <link rel="stylesheet" href="../static/style.css?v=0.3.24">
     </head>
     <body>
         <div class="app-shell">
@@ -920,6 +1108,33 @@ def run_search_preview(q: str, media_type: str = "movie"):
 @app.get("/api/search_json")
 def search_preview_json(q: str, media_type: str = "movie"):
     return run_search_preview(q, media_type)
+
+
+@app.post("/api/search_jobs")
+def start_search_job(q: str, media_type: str = "movie"):
+    query = (q or "").strip()
+    if not query:
+        raise HTTPException(status_code=400, detail="Zadej název filmu nebo seriálu.")
+    ensure_search_sources()
+    media_type = media_type if media_type in ("movie", "tvshow") else "movie"
+    return search_job_response(create_search_job(query, media_type))
+
+
+@app.get("/api/search_jobs/{job_id}")
+def get_search_job(job_id: str):
+    job = read_search_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Vyhledávací job neexistuje nebo už expiroval.")
+    return search_job_response(job)
+
+
+@app.post("/api/search_jobs/{job_id}/cancel")
+def cancel_search_job(job_id: str):
+    job = read_search_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Vyhledávací job neexistuje nebo už expiroval.")
+    update_search_job(job_id, cancel_requested=True, step="Zastavuji hledání")
+    return search_job_response(read_search_job(job_id))
 
 
 @app.get("/api/search", response_class=HTMLResponse)

@@ -2,6 +2,11 @@
 
 This file is intentionally duplicated at the repository root for Home Assistant compatibility. The add-on changelog source is `streamcinema/CHANGELOG.md`.
 
+## 0.3.24
+
+- Search now runs as a backend job and the GUI polls live progress counts while providers are being processed.
+- The progress line now updates movies/episodes, streams, filtered streams, elapsed time, and the current provider step during the search.
+
 ## 0.3.23
 
 - The GUI header now shows the current add-on version next to `Katalog filmů, seriálů a streamů`.
