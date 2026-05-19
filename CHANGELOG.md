@@ -2,6 +2,13 @@
 
 This file is intentionally duplicated at the repository root for Home Assistant compatibility. The add-on changelog source is `streamcinema/CHANGELOG.md`.
 
+## 0.3.21
+
+- Search progress now uses a compact `Movies/Episodes · Streams · Filtered · Time · current step` line.
+- Search results can optionally show `Ignorované streamy`, i.e. streams removed by the filename query filter.
+- Added a `Zastavit hledání` button that aborts the current request, clears results and the search field, and reports that the search was stopped.
+- If search fails, the GUI shows the last available results; if the server returned nothing yet, it shows a clear explanation.
+
 ## 0.3.20
 
 - Genre selection in search and edit forms now uses a compact chip list instead of a tall multi-select box.

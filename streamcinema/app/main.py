@@ -264,42 +264,27 @@ def metadata_for_query(query, media_type=None):
     }
 
 
-def search_provider_streams(query, media_type="movie"):
-    queries = [query]
-    if media_type == "tvshow":
-        queries.extend(series_search_queries(query))
+def stream_from_provider_item(item):
+    provider = item.get("provider")
+    ident = item.get("ident")
+    filename = item.get("name") or item.get("filename") or ""
+    info = parse_stream_info(filename)
+    return {
+        "provider": provider,
+        "ident": ident,
+        "filename": filename,
+        "size": int(item.get("size") or 0),
+        "duration": item.get("duration"),
+        "width": item.get("width") or info["width"],
+        "height": item.get("height") or info["height"],
+        "format": item.get("format") or info["format"],
+        "season": item.get("season") or info["season"],
+        "episode": item.get("episode") or info["episode"],
+        "stream_url": item.get("stream_url") or "",
+    }
 
-    streams = []
-    seen = set()
-    for search_query in queries:
-        for item in search_provider_files(search_query):
-            provider = item.get("provider")
-            ident = item.get("ident")
-            if not provider or not ident or (provider, ident) in seen:
-                continue
 
-            filename = item.get("name") or item.get("filename") or ""
-            if not stream_name_matches_query(filename, query):
-                continue
-
-            seen.add((provider, ident))
-            info = parse_stream_info(filename)
-            streams.append(
-                {
-                    "provider": provider,
-                    "ident": ident,
-                    "filename": filename,
-                    "size": int(item.get("size") or 0),
-                    "duration": item.get("duration"),
-                    "width": item.get("width") or info["width"],
-                    "height": item.get("height") or info["height"],
-                    "format": item.get("format") or info["format"],
-                    "season": item.get("season") or info["season"],
-                    "episode": item.get("episode") or info["episode"],
-                    "stream_url": item.get("stream_url") or "",
-                }
-            )
-
+def sort_streams(streams):
     return sorted(
         streams,
         key=lambda item: (
@@ -309,6 +294,41 @@ def search_provider_streams(query, media_type="movie"):
             item.get("filename") or "",
         ),
     )
+
+
+def search_provider_stream_sets(query, media_type="movie"):
+    queries = [query]
+    if media_type == "tvshow":
+        queries.extend(series_search_queries(query))
+
+    streams = []
+    ignored_streams = []
+    seen = set()
+    for search_query in queries:
+        for item in search_provider_files(search_query):
+            provider = item.get("provider")
+            ident = item.get("ident")
+            if not provider or not ident or (provider, ident) in seen:
+                continue
+
+            filename = item.get("name") or item.get("filename") or ""
+            stream = stream_from_provider_item(item)
+            if not stream_name_matches_query(filename, query):
+                stream["ignored"] = True
+                stream["ignored_reason"] = "Název neobsahuje všechny části původního dotazu."
+                ignored_streams.append(stream)
+                seen.add((provider, ident))
+                continue
+
+            seen.add((provider, ident))
+            streams.append(stream)
+
+    return sort_streams(streams), sort_streams(ignored_streams)
+
+
+def search_provider_streams(query, media_type="movie"):
+    streams, _ignored_streams = search_provider_stream_sets(query, media_type)
+    return streams
 
 
 def series_search_queries(query):
@@ -657,7 +677,7 @@ def render_search_page(result):
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Stream Cinema - výsledky</title>
-        <link rel="stylesheet" href="../static/style.css?v=0.3.20">
+        <link rel="stylesheet" href="../static/style.css?v=0.3.21">
     </head>
     <body>
         <div class="app-shell">
@@ -868,12 +888,14 @@ def run_search_preview(q: str, media_type: str = "movie"):
     media_type = media_type if media_type in ("movie", "tvshow") else "movie"
     metadata = metadata_for_query(query, media_type=media_type)
     metadata["search_query"] = query
-    streams = search_provider_streams(query, media_type)
+    streams, ignored_streams = search_provider_stream_sets(query, media_type)
     metadata["type"] = media_type
     return {
         "metadata": metadata,
         "streams": streams,
+        "ignored_streams": ignored_streams,
         "totalCount": len(streams),
+        "ignoredCount": len(ignored_streams),
         "enabled_sources": [name for name, _scraper in enabled_sources()],
     }
 

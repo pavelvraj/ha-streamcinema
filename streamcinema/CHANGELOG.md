@@ -2,6 +2,13 @@
 
 Všechny důležité změny add-onu StreamCinema API jsou vedené v tomto souboru.
 
+## 0.3.21
+
+- Průběh vyhledávání používá kompaktní formát `Filmů/Dílů · Streamů · Vyfiltrováno · Čas · aktuální krok`.
+- Výsledky vyhledávání umí volitelně zobrazit `Ignorované streamy`, tedy položky vyřazené filtrem názvu.
+- Přidáno tlačítko `Zastavit hledání`, které přeruší aktuální požadavek, vyčistí výsledky i vyhledávací pole a zobrazí informaci o zastavení.
+- Pokud hledání skončí chybou, GUI zobrazí poslední dostupné výsledky; pokud server ještě nic nevrátil, zobrazí srozumitelné vysvětlení.
+
 ## 0.3.20
 
 - Výběr žánrů ve vyhledávání i editaci je nově kompaktní chip seznam místo vysokého multi-select pole.

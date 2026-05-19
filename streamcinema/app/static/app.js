@@ -2,6 +2,7 @@
     var API_URL = "api";
     var catalogItems = [];
     var currentSearch = null;
+    var currentSearchController = null;
     var currentRefresh = null;
     var sourceStatus = { can_search: true, message: "" };
     var selectedMediaId = null;
@@ -11,6 +12,8 @@
     var refreshFilters = { provider: "", format: "", text: "", minSize: "", maxSize: "" };
     var activeProgressTimer = null;
     var activeProgressStarted = 0;
+    var activeProgressMode = "";
+    var showIgnoredStreams = false;
     var GENRE_OPTIONS = [
         "Akční", "Animovaný", "Dobrodružný", "Dokumentární", "Drama", "Fantasy",
         "Historický", "Horor", "Komedie", "Krimi", "Mysteriózní", "Pohádka",
@@ -161,11 +164,12 @@
             '</div>';
     }
 
-    function streamStats(streams) {
+    function streamStats(streams, ignoredStreams) {
         var providers = {};
         var seasons = {};
         var episodes = {};
         streams = streams || [];
+        ignoredStreams = ignoredStreams || [];
         for (var i = 0; i < streams.length; i += 1) {
             var stream = streams[i] || {};
             if (stream.provider) providers[stream.provider] = true;
@@ -175,7 +179,9 @@
             }
         }
         return {
+            items: Object.keys(episodes).length || (streams.length ? 1 : 0),
             streams: streams.length,
+            ignored: ignoredStreams.length,
             providers: Object.keys(providers).length,
             seasons: Object.keys(seasons).length,
             episodes: Object.keys(episodes).length,
@@ -183,31 +189,32 @@
     }
 
     function renderProgress(label, details, stats, active) {
-        var elapsed = activeProgressStarted ? Math.max(1, Math.floor((Date.now() - activeProgressStarted) / 1000)) : 0;
-        var statsHtml = "";
-        if (stats) {
-            statsHtml = '<div class="progress-stats">' +
-                '<span><strong>' + Number(stats.streams || 0) + '</strong> streamů</span>' +
-                '<span><strong>' + Number(stats.providers || 0) + '</strong> zdrojů</span>' +
-                (stats.seasons ? '<span><strong>' + Number(stats.seasons || 0) + '</strong> sérií</span>' : "") +
-                (stats.episodes ? '<span><strong>' + Number(stats.episodes || 0) + '</strong> dílů</span>' : "") +
-                '</div>';
-        }
+        stats = stats || {};
+        var elapsed = stats.elapsed || (activeProgressStarted ? Math.max(1, Math.floor((Date.now() - activeProgressStarted) / 1000)) : 0);
+        var stopButton = active && activeProgressMode === "search"
+            ? '<button type="button" class="compact-button progress-stop" data-action="stop-search">Zastavit hledání</button>'
+            : "";
+        var line = "Filmů/Dílů: " + Number(stats.items || 0) +
+            " · Streamů: " + Number(stats.streams || 0) +
+            " · Vyfiltrováno: " + Number(stats.ignored || 0) +
+            " · Čas: " + elapsed + " s" +
+            " · " + (details || "");
         return '<div class="operation-progress ' + (active ? "active" : "done") + '">' +
             '<div class="progress-spinner"></div>' +
             '<div>' +
                 '<strong>' + escapeHtml(label) + '</strong>' +
-                '<p>' + escapeHtml(details || "") + (active ? ' · běží ' + elapsed + ' s' : "") + '</p>' +
-                statsHtml +
+                '<p>' + escapeHtml(line) + '</p>' +
+                stopButton +
             '</div>' +
         '</div>';
     }
 
-    function startProgress(containerId, label, steps) {
+    function startProgress(containerId, label, steps, mode) {
         var container = el(containerId);
         var index = 0;
         steps = steps || ["Pracuji..."];
         stopProgress();
+        activeProgressMode = mode || "";
         activeProgressStarted = Date.now();
         function tick() {
             var node = el(containerId);
@@ -228,14 +235,23 @@
             activeProgressTimer = null;
         }
         activeProgressStarted = 0;
+        activeProgressMode = "";
     }
 
-    function renderOperationSummary(containerId, label, details, streams) {
+    function renderOperationSummary(containerId, label, details, streams, ignoredStreams) {
         var container = el(containerId);
         if (!container) return;
-        stopProgress();
+        var elapsed = activeProgressStarted ? Math.max(1, Math.floor((Date.now() - activeProgressStarted) / 1000)) : 0;
+        var stats = streamStats(streams || [], ignoredStreams || []);
+        stats.elapsed = elapsed;
+        if (activeProgressTimer) {
+            window.clearInterval(activeProgressTimer);
+            activeProgressTimer = null;
+        }
+        activeProgressStarted = 0;
+        activeProgressMode = "";
         container.classList.remove("hidden");
-        container.innerHTML = renderProgress(label, details, streamStats(streams || []), false);
+        container.innerHTML = renderProgress(label, details, stats, false);
     }
 
     function parseGenreInput(value) {
@@ -517,33 +533,73 @@
         }
 
         setSearching(true);
+        showIgnoredStreams = false;
         showStatus("Vyhledávám streamy a metadata...", "info");
         if (panel) {
             panel.classList.remove("hidden");
             panel.innerHTML = '<div id="searchProgress"></div>';
+        }
+        if (window.AbortController) {
+            currentSearchController = new AbortController();
+        } else {
+            currentSearchController = null;
         }
         startProgress("searchProgress", "Vyhledávání běží", [
             "Získávám metadata filmu nebo seriálu",
             "Prohledávám povolené zdroje",
             "Filtruji názvy podle zadaného textu",
             mediaType === "tvshow" ? "Rozděluji nalezené streamy na série a díly" : "Počítám velikosti a formáty streamů",
-        ]);
+        ], "search");
 
-        requestJson(API_URL + "/search_json?q=" + encodeURIComponent(query) + "&media_type=" + encodeURIComponent(mediaType))
+        requestJson(API_URL + "/search_json?q=" + encodeURIComponent(query) + "&media_type=" + encodeURIComponent(mediaType), currentSearchController ? { signal: currentSearchController.signal } : {})
             .then(function (data) {
                 resetSearchTableState();
                 currentSearch = data;
+                currentSearchController = null;
                 renderSearchResults();
-                renderOperationSummary("searchProgress", "Vyhledávání dokončeno", "Výsledky jsou připravené k filtrování, řazení a výběru.", data.streams || []);
-                showStatus("Vyhledávání dokončeno: " + (data.streams || []).length + " streamů.", "success");
+                renderOperationSummary("searchProgress", "Vyhledávání dokončeno", "Výsledky jsou připravené k filtrování, řazení a výběru.", data.streams || [], data.ignored_streams || []);
+                showStatus("Vyhledávání dokončeno: " + (data.streams || []).length + " streamů, vyfiltrováno " + (data.ignored_streams || []).length + ".", "success");
                 setSearching(false);
             })
             .catch(function (error) {
                 console.error(error);
                 stopProgress();
-                showStatus(errorMessage(error, "Vyhledávání selhalo. Zkontroluj log add-onu."), "error");
+                currentSearchController = null;
+                if (error && (error.name === "AbortError" || error.message === "Search stopped")) {
+                    showStatus("Hledání bylo zastaveno.", "info");
+                } else {
+                    if (currentSearch && currentSearch.metadata) {
+                        renderSearchResults();
+                        renderOperationSummary("searchProgress", "Vyhledávání skončilo chybou", "Zobrazuji poslední dostupné výsledky. Chyba: " + errorMessage(error, "neznámá chyba"), currentSearch.streams || [], currentSearch.ignored_streams || []);
+                    } else {
+                        var failedPanel = el("searchPanel");
+                        if (failedPanel) {
+                            failedPanel.classList.remove("hidden");
+                            failedPanel.innerHTML = '<div class="empty-list">Vyhledávání skončilo chybou dřív, než server vrátil výsledky. Není tedy co zobrazit.</div>';
+                        }
+                    }
+                    showStatus("Vyhledávání selhalo: " + errorMessage(error, "Zkontroluj log add-onu."), "error");
+                }
                 setSearching(false);
             });
+    }
+
+    function stopSearch() {
+        var panel = el("searchPanel");
+        var input = el("searchInput");
+        if (currentSearchController) {
+            currentSearchController.abort();
+            currentSearchController = null;
+        }
+        stopProgress();
+        currentSearch = null;
+        setSearching(false);
+        if (panel) {
+            panel.innerHTML = "";
+            panel.classList.add("hidden");
+        }
+        if (input) input.value = "";
+        showStatus("Hledání bylo zastaveno a formulář výsledků vyčištěn.", "info");
     }
 
     function renderSearchResults() {
@@ -551,7 +607,8 @@
         if (!panel) return;
 
         var metadata = currentSearch ? currentSearch.metadata : null;
-        var streams = currentSearch ? (currentSearch.streams || []) : [];
+        var streams = visibleSearchStreams();
+        var ignoredCount = currentSearch ? (currentSearch.ignored_streams || []).length : 0;
         if (!metadata) {
             panel.innerHTML = "";
             panel.classList.add("hidden");
@@ -572,6 +629,7 @@
             '</div>' +
             '<div class="stream-actions">' +
                 '<label><input type="checkbox" id="selectAllStreams"> Vybrat vše</label>' +
+                '<label><input type="checkbox" id="showIgnoredStreams"' + (showIgnoredStreams ? " checked" : "") + '> Ignorované streamy (' + ignoredCount + ')</label>' +
                 '<button type="button" data-action="save-selected">Zařadit vybrané do sbírky</button>' +
             '</div>' +
             '<div class="search-metadata-edit">' +
@@ -580,6 +638,15 @@
             renderSearchStreams(metadata.type, streams);
 
         panel.classList.remove("hidden");
+    }
+
+    function visibleSearchStreams() {
+        if (!currentSearch) return [];
+        var streams = (currentSearch.streams || []).slice();
+        if (showIgnoredStreams) {
+            streams = streams.concat(currentSearch.ignored_streams || []);
+        }
+        return streams;
     }
 
     function renderSearchStreams(mediaType, streams) {
@@ -685,10 +752,11 @@
             html += entries.map(function (entry) {
                 var stream = entry.stream;
                 var season = stream.season && stream.episode ? '<span class="episode-badge">S' + stream.season + ' E' + stream.episode + '</span>' : "";
-                return '<tr class="selectable-row" data-toggle-search-index="' + entry.index + '">' +
+                var ignored = stream.ignored ? '<span class="ignored-badge">ignorovaný</span>' : "";
+                return '<tr class="selectable-row ' + (stream.ignored ? "ignored-row" : "") + '" data-toggle-search-index="' + entry.index + '">' +
                     '<td class="check-col"><input type="checkbox" class="search-stream-check" data-index="' + entry.index + '"></td>' +
                     '<td>' + providerBadge(stream.provider) + '</td>' +
-                    '<td><strong>' + escapeHtml(stream.filename) + '</strong> ' + season + '</td>' +
+                    '<td><strong>' + escapeHtml(stream.filename) + '</strong> ' + season + ' ' + ignored + '</td>' +
                     '<td>' + escapeHtml(stream.format || "-") + '</td>' +
                     '<td class="numeric-cell" data-sort-value="' + Number(stream.size || 0) + '">' + formatBytes(stream.size) + '</td>' +
                     '<td>' + escapeHtml(streamResolution(stream)) + '</td>' +
@@ -711,8 +779,9 @@
     function saveSelectedStreams() {
         var checks = document.querySelectorAll(".search-stream-check:checked");
         var streams = [];
+        var sourceStreams = visibleSearchStreams();
         for (var i = 0; i < checks.length; i += 1) {
-            streams.push(currentSearch.streams[Number(checks[i].getAttribute("data-index"))]);
+            streams.push(sourceStreams[Number(checks[i].getAttribute("data-index"))]);
         }
 
         if (!streams.length) {
@@ -1294,6 +1363,7 @@
             event.preventDefault();
             sortStreamTable(target.getAttribute("data-key"), target.getAttribute("data-mode") || "search");
         }
+        if (action === "stop-search") stopSearch();
         if (action === "check-media") checkMediaStreams(id);
         if (action === "refresh-media") refreshMedia(id);
         if (action === "add-refresh-streams") addRefreshStreams();
@@ -1460,6 +1530,10 @@
             }
             if (event.target && event.target.id === "selectAllStreams") {
                 toggleSearchStreams(event.target.checked);
+            }
+            if (event.target && event.target.id === "showIgnoredStreams") {
+                showIgnoredStreams = event.target.checked;
+                renderSearchResults();
             }
             if (event.target && event.target.id === "selectAllRefreshStreams") {
                 var refreshChecks = document.querySelectorAll("#refreshPanel .search-stream-check");

@@ -411,6 +411,11 @@ textarea {
     color: var(--muted);
 }
 
+.progress-stop {
+    margin-top: 8px;
+    background: var(--warning);
+}
+
 .progress-stats {
     display: flex;
     gap: 8px;
@@ -822,6 +827,23 @@ summary {
 .episode-badge {
     background: #334155;
     border-color: #475569;
+}
+
+.ignored-badge {
+    display: inline-flex;
+    align-items: center;
+    min-height: 21px;
+    border-radius: 999px;
+    background: #4a3420;
+    border: 1px solid #805c32;
+    color: #ffd9a8;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 1px 7px;
+}
+
+.ignored-row {
+    background: #1f1b16;
 }
 
 .stream-row {
