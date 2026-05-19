@@ -2,6 +2,12 @@
 
 This file is intentionally duplicated at the repository root for Home Assistant compatibility. The add-on changelog source is `streamcinema/CHANGELOG.md`.
 
+## 0.3.22
+
+- Episode parsing now recognizes `S01E02` even after underscores or other filename separators.
+- Added numeric season/episode variants such as `1-02`, `1 03`, `2 6`, `2_06`, and `2.6`.
+- Parsing validates sane season and episode ranges to avoid treating years or resolutions as episodes.
+
 ## 0.3.21
 
 - Search progress now uses a compact `Movies/Episodes · Streams · Filtered · Time · current step` line.

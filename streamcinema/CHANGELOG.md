@@ -2,6 +2,12 @@
 
 Všechny důležité změny add-onu StreamCinema API jsou vedené v tomto souboru.
 
+## 0.3.22
+
+- Parser dílů nově rozpozná `S01E02` i po podtržítku nebo jiném oddělovači v názvu souboru.
+- Přidáno rozpoznání numerických zápisů série/dílu jako `1-02`, `1 03`, `2 6`, `2_06` nebo `2.6`.
+- Rozpoznávání má základní validaci rozsahu, aby se jako série/díl omylem nebraly roky nebo rozlišení.
+
 ## 0.3.21
 
 - Průběh vyhledávání používá kompaktní formát `Filmů/Dílů · Streamů · Vyfiltrováno · Čas · aktuální krok`.

@@ -124,30 +124,47 @@ def parse_stream_info(filename):
 
     season = None
     episode = None
-    match = re.search(r"\b[sS](\d{1,2})[ ._-]*[eE](\d{1,3})\b", name)
-    if not match:
-        match = re.search(r"\b(\d{1,2})[xX](\d{1,3})\b", name)
-    if match:
-        season = int(match.group(1))
-        episode = int(match.group(2))
+
+    def valid_episode_match(match):
+        if not match:
+            return None
+        found_season = int(match.group(1))
+        found_episode = int(match.group(2))
+        if 1 <= found_season <= 30 and 1 <= found_episode <= 300:
+            return found_season, found_episode
+        return None
+
+    parsed = None
+    match = re.search(r"(?<![A-Za-z0-9])[sS](\d{1,2})[ ._-]*[eE](\d{1,3})(?![A-Za-z0-9])", name)
+    parsed = valid_episode_match(match)
+    if not parsed:
+        match = re.search(r"(?<![A-Za-z0-9])(\d{1,2})[xX](\d{1,3})(?![A-Za-z0-9])", name)
+        parsed = valid_episode_match(match)
+    if not parsed:
+        # Common Czech/SK file names often use compact season-episode pairs:
+        # "1-02", "1 03", "2 6". Require separators and sane ranges to avoid years/resolutions.
+        match = re.search(r"(?<!\d)(\d{1,2})[ ._-]+(\d{1,3})(?!\d)", name)
+        parsed = valid_episode_match(match)
+    if parsed:
+        season, episode = parsed
     else:
         match = re.search(
             r"\b(?:serie|série|season)\s*\.?\s*(\d{1,2})\D{0,12}(?:dil|díl|epizoda|episode|ep\.?)\s*\.?\s*(\d{1,3})\b",
             lower,
             re.I,
         )
-        if match:
-            season = int(match.group(1))
-            episode = int(match.group(2))
+        parsed = valid_episode_match(match)
+        if parsed:
+            season, episode = parsed
         else:
             match = re.search(
                 r"\b(\d{1,2})\D{0,12}(?:serie|série|season)\D{0,12}(\d{1,3})\D{0,6}(?:dil|díl|epizoda|episode|ep\.?)\b",
                 lower,
                 re.I,
             )
-            if match:
-                season = int(match.group(1))
-                episode = int(match.group(2))
+            parsed = valid_episode_match(match)
+            if parsed:
+                season, episode = parsed
             else:
                 match = re.search(r"\b(?:epizoda|episode|dil|díl|ep\.?)\s*\.?\s*(\d{1,3})\b", lower, re.I)
                 if match:
@@ -677,7 +694,7 @@ def render_search_page(result):
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Stream Cinema - výsledky</title>
-        <link rel="stylesheet" href="../static/style.css?v=0.3.21">
+        <link rel="stylesheet" href="../static/style.css?v=0.3.22">
     </head>
     <body>
         <div class="app-shell">
