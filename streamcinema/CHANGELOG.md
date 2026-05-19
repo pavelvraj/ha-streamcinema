@@ -2,6 +2,10 @@
 
 Všechny důležité změny add-onu StreamCinema API jsou vedené v tomto souboru.
 
+## 0.3.23
+
+- V hlavičce GUI se vedle textu `Katalog filmů, seriálů a streamů` zobrazuje aktuální verze add-onu.
+
 ## 0.3.22
 
 - Parser dílů nově rozpozná `S01E02` i po podtržítku nebo jiném oddělovači v názvu souboru.

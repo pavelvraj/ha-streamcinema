@@ -2,6 +2,10 @@
 
 This file is intentionally duplicated at the repository root for Home Assistant compatibility. The add-on changelog source is `streamcinema/CHANGELOG.md`.
 
+## 0.3.23
+
+- The GUI header now shows the current add-on version next to `Katalog filmů, seriálů a streamů`.
+
 ## 0.3.22
 
 - Episode parsing now recognizes `S01E02` even after underscores or other filename separators.
