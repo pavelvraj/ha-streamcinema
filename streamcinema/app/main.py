@@ -146,6 +146,18 @@ def parse_stream_info(filename):
         match = re.search(r"(?<![A-Za-z0-9])(\d{1,2})[xX](\d{1,3})(?![A-Za-z0-9])", name)
         parsed = valid_episode_match(match)
     if not parsed:
+        # Compact scene naming sometimes stores S04E03 as ".403." or "_403_".
+        # Treat 3-4 digit blocks as season+two-digit episode, but avoid years.
+        match = re.search(r"(?<![A-Za-z0-9])(\d{3,4})(?![A-Za-z0-9])", name)
+        if match:
+            compact = match.group(1)
+            value = int(compact)
+            if not 1900 <= value <= 2099:
+                found_season = int(compact[:-2])
+                found_episode = int(compact[-2:])
+                if 1 <= found_season <= 30 and 1 <= found_episode <= 300:
+                    parsed = (found_season, found_episode)
+    if not parsed:
         # Common Czech/SK file names often use compact season-episode pairs:
         # "1-02", "1 03", "2 6". Require separators and sane ranges to avoid years/resolutions.
         match = re.search(r"(?<!\d)(\d{1,2})[ ._-]+(\d{1,3})(?!\d)", name)
@@ -248,6 +260,7 @@ def metadata_for_query(query, media_type=None):
             "genres": csfd_data.get("genres") or [],
             "csfd_id": csfd_data.get("csfd_id"),
             "imdb_id": csfd_data.get("imdb_id"),
+            "episode_metadata": csfd_data.get("episode_metadata") or [],
         }
 
     imdb_data = IMDB.search_movie(query, media_type=media_type)
@@ -267,6 +280,7 @@ def metadata_for_query(query, media_type=None):
             "genres": imdb_data.get("genres") or [],
             "csfd_id": None,
             "imdb_id": imdb_id,
+            "episode_metadata": imdb_data.get("episode_metadata") or [],
         }
 
     return {
@@ -283,6 +297,7 @@ def metadata_for_query(query, media_type=None):
         "genres": [],
         "csfd_id": None,
         "imdb_id": None,
+        "episode_metadata": [],
     }
 
 
@@ -561,9 +576,9 @@ def upsert_media(conn, metadata, selected_streams):
         """
         INSERT INTO media (
             id, type, title, original_title, year, genres, rating, plot,
-            poster, fanart, imdb_id, csfd_id, search_query
+            poster, fanart, imdb_id, csfd_id, search_query, episode_metadata
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
             type=excluded.type,
             title=excluded.title,
@@ -576,7 +591,8 @@ def upsert_media(conn, metadata, selected_streams):
             fanart=excluded.fanart,
             imdb_id=excluded.imdb_id,
             csfd_id=excluded.csfd_id,
-            search_query=excluded.search_query
+            search_query=excluded.search_query,
+            episode_metadata=excluded.episode_metadata
         """,
         (
             media_id,
@@ -592,6 +608,7 @@ def upsert_media(conn, metadata, selected_streams):
             metadata.get("imdb_id"),
             metadata.get("csfd_id"),
             metadata.get("search_query") or metadata.get("title") or "",
+            json_dumps(metadata.get("episode_metadata") or []),
         ),
     )
 
@@ -692,7 +709,34 @@ def serialize_stream_row(row):
     }
 
 
-def group_episodes(streams):
+def episode_metadata_lookup(episode_metadata):
+    lookup = {}
+    for season in episode_metadata or []:
+        season_number = season.get("season")
+        if season_number is None:
+            continue
+        season_key = int(season_number)
+        lookup[(season_key, None)] = {
+            "title": season.get("title") or "",
+            "plot": season.get("plot") or "",
+            "poster": season.get("poster") or "",
+            "fanart": season.get("fanart") or season.get("poster") or "",
+        }
+        for episode in season.get("episodes") or []:
+            episode_number = episode.get("episode")
+            if episode_number is None:
+                continue
+            lookup[(season_key, int(episode_number))] = {
+                "title": episode.get("title") or "",
+                "plot": episode.get("plot") or "",
+                "poster": episode.get("poster") or "",
+                "fanart": episode.get("fanart") or episode.get("poster") or "",
+                "csfd_id": episode.get("csfd_id"),
+            }
+    return lookup
+
+
+def group_episodes(streams, episode_metadata=None):
     seasons = {}
     for stream in streams:
         season = stream.get("season")
@@ -701,12 +745,22 @@ def group_episodes(streams):
             continue
         seasons.setdefault(str(season), {}).setdefault(str(episode), []).append(stream)
 
+    metadata_lookup = episode_metadata_lookup(episode_metadata)
     return [
         {
             "season": int(season),
+            "title": metadata_lookup.get((int(season), None), {}).get("title") or "",
+            "plot": metadata_lookup.get((int(season), None), {}).get("plot") or "",
+            "poster": metadata_lookup.get((int(season), None), {}).get("poster") or "",
+            "fanart": metadata_lookup.get((int(season), None), {}).get("fanart") or "",
             "episodes": [
                 {
                     "episode": int(episode),
+                    "title": metadata_lookup.get((int(season), int(episode)), {}).get("title") or "",
+                    "plot": metadata_lookup.get((int(season), int(episode)), {}).get("plot") or "",
+                    "poster": metadata_lookup.get((int(season), int(episode)), {}).get("poster") or "",
+                    "fanart": metadata_lookup.get((int(season), int(episode)), {}).get("fanart") or "",
+                    "csfd_id": metadata_lookup.get((int(season), int(episode)), {}).get("csfd_id"),
                     "streams": episode_streams,
                 }
                 for episode, episode_streams in sorted(
@@ -720,6 +774,7 @@ def group_episodes(streams):
 
 def serialize_media_row(conn, row, include_streams=True):
     media = dict(row)
+    episode_metadata = safe_json_loads(media.get("episode_metadata"), [])
     streams = []
     if include_streams:
         stream_rows = conn.execute(
@@ -742,9 +797,10 @@ def serialize_media_row(conn, row, include_streams=True):
         "imdb_id": media.get("imdb_id"),
         "csfd_id": media.get("csfd_id"),
         "search_query": media.get("search_query") or media.get("title") or "",
+        "episode_metadata": episode_metadata,
         "stream_count": len(streams),
         "streams": streams,
-        "seasons": group_episodes(streams),
+        "seasons": group_episodes(streams, episode_metadata),
         "info_labels": {
             "title": media.get("title") or "",
             "originaltitle": media.get("original_title") or "",
@@ -882,7 +938,7 @@ def render_search_page(result):
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Stream Cinema - výsledky</title>
-        <link rel="stylesheet" href="../static/style.css?v=0.3.24">
+        <link rel="stylesheet" href="../static/style.css?v=0.3.25">
     </head>
     <body>
         <div class="app-shell">
@@ -1271,6 +1327,14 @@ def refresh_media_streams(media_id: str):
         query = (media.get("search_query") or media.get("title") or "").strip()
         if not query:
             raise HTTPException(status_code=400, detail="Media has no stored search query")
+
+        if (media.get("type") or "movie") == "tvshow" and media.get("csfd_id"):
+            csfd_details = CSFD.get_movie_details(media.get("csfd_id"), media_type="tvshow")
+            if csfd_details and csfd_details.get("episode_metadata"):
+                conn.execute(
+                    "UPDATE media SET episode_metadata=? WHERE id=?",
+                    (json_dumps(csfd_details.get("episode_metadata")), media_id),
+                )
 
         found_streams = search_provider_streams(query, media.get("type") or "movie")
         found_keys = {

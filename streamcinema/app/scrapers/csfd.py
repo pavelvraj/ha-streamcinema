@@ -90,6 +90,7 @@ class CSFDScraper:
                 "plot": self._plot(soup),
                 "genres": self._genres(soup),
                 "type": media_type or self._media_type(soup),
+                "episode_metadata": self._episode_metadata(csfd_id, media_type=media_type, overview_soup=soup),
             }
         except Exception as exc:
             print(f"CSFD Detail Error: {exc}")
@@ -123,7 +124,11 @@ class CSFDScraper:
         try:
             response = self.session.get(f"{self.api_base_url}/movie/{csfd_id}", timeout=12)
             response.raise_for_status()
-            return self._normalize_api_movie(response.json(), media_type)
+            data = response.json()
+            result = self._normalize_api_movie(data, media_type)
+            if result is not None:
+                result["episode_metadata"] = self._episode_metadata(csfd_id, data, result.get("type") or media_type)
+            return result
         except Exception as exc:
             print(f"CSFD API Detail Error: {exc}")
             return None
@@ -150,7 +155,10 @@ class CSFDScraper:
             response = self.session.get(self.CZDB_URL, params={"uid": csfd_id}, timeout=12)
             response.raise_for_status()
             results = self._czdb_results(response.json())
-            return self._normalize_czdb_movie(results[0], media_type) if results else None
+            result = self._normalize_czdb_movie(results[0], media_type) if results else None
+            if result is not None:
+                result["episode_metadata"] = self._episode_metadata(csfd_id, result, result.get("type") or media_type)
+            return result
         except Exception as exc:
             print(f"CSFD CZDB Detail Error: {exc}")
             return None
@@ -242,7 +250,218 @@ class CSFDScraper:
             "plot": self._clean_czdb_value(data.get("plot")),
             "genres": genres,
             "type": media_type or ("tvshow" if self._looks_like_series(data) else "movie"),
+            "episode_metadata": self._normalize_episode_metadata(data),
         }
+
+    def _episode_metadata(self, csfd_id, data=None, media_type=None, overview_soup=None):
+        metadata = self._normalize_episode_metadata(data)
+        if metadata:
+            return metadata
+        if media_type != "tvshow":
+            return []
+        return self._episode_metadata_html(csfd_id, overview_soup=overview_soup)
+
+    def _normalize_episode_metadata(self, data):
+        if not isinstance(data, dict):
+            return []
+
+        season_items = self._first_list(data, ("seasons", "series", "seasonList", "season_list"))
+        seasons = []
+        if season_items:
+            for index, season_data in enumerate(season_items, start=1):
+                if not isinstance(season_data, dict):
+                    continue
+                season_number = self._first_int(
+                    season_data,
+                    ("season", "seasonNumber", "season_number", "number", "no", "order", "serie", "série"),
+                    default=index,
+                )
+                episodes = self._normalize_episode_list(
+                    self._first_list(season_data, ("episodes", "episodeList", "episode_list", "items")),
+                    default_season=season_number,
+                )
+                seasons.append(
+                    {
+                        "season": season_number,
+                        "title": self._first_text(season_data, ("title", "name", "nazev", "název")),
+                        "plot": self._first_text(season_data, ("plot", "description", "popis", "content")),
+                        "poster": self._image_from_data(season_data),
+                        "fanart": self._first_text(season_data, ("fanart", "backdrop", "photo")),
+                        "episodes": episodes,
+                    }
+                )
+
+        flat_episodes = self._normalize_episode_list(
+            self._first_list(data, ("episodes", "episodeList", "episode_list")),
+            default_season=None,
+        )
+        if flat_episodes:
+            grouped = {season["season"]: season for season in seasons}
+            for episode in flat_episodes:
+                season_number = episode.get("season") or 1
+                grouped.setdefault(
+                    season_number,
+                    {"season": season_number, "title": "", "plot": "", "poster": "", "fanart": "", "episodes": []},
+                )["episodes"].append(episode)
+            seasons = list(grouped.values())
+
+        return self._clean_episode_metadata(seasons)
+
+    def _normalize_episode_list(self, items, default_season=None):
+        episodes = []
+        if not isinstance(items, list):
+            return episodes
+        for index, item in enumerate(items, start=1):
+            if not isinstance(item, dict):
+                continue
+            season = self._first_int(
+                item,
+                ("season", "seasonNumber", "season_number", "serie", "série"),
+                default=default_season,
+            )
+            episode = self._first_int(
+                item,
+                ("episode", "episodeNumber", "episode_number", "number", "no", "order", "dil", "díl"),
+                default=index,
+            )
+            if not season or not episode:
+                continue
+            episodes.append(
+                {
+                    "season": season,
+                    "episode": episode,
+                    "title": self._first_text(item, ("title", "name", "nazev", "název")),
+                    "plot": self._first_text(item, ("plot", "description", "popis", "content")),
+                    "poster": self._image_from_data(item),
+                    "fanart": self._first_text(item, ("fanart", "backdrop", "photo")),
+                    "csfd_id": str(item.get("id") or item.get("csfd_id") or "") or None,
+                }
+            )
+        return episodes
+
+    def _episode_metadata_html(self, csfd_id, overview_soup=None):
+        soups = []
+        if overview_soup is not None:
+            soups.append(overview_soup)
+        try:
+            response = self.session.get(f"{self.BASE_URL}/film/{csfd_id}/epizody/", timeout=10)
+            response.raise_for_status()
+            if not self._is_bot_challenge(response.text):
+                soups.append(BeautifulSoup(response.content, "lxml"))
+        except Exception as exc:
+            print(f"CSFD Episode Metadata Error: {exc}")
+
+        episodes = []
+        for soup in soups:
+            episodes.extend(self._episodes_from_soup(soup))
+        if not episodes:
+            return []
+        grouped = {}
+        for episode in episodes:
+            season = episode["season"]
+            grouped.setdefault(season, {"season": season, "title": "", "plot": "", "poster": "", "fanart": "", "episodes": []})
+            if not grouped[season]["poster"] and episode.get("poster"):
+                grouped[season]["poster"] = episode["poster"]
+            grouped[season]["episodes"].append(episode)
+        return self._clean_episode_metadata(grouped.values())
+
+    def _episodes_from_soup(self, soup):
+        episodes = []
+        seen = set()
+        current_season = 1
+        for node in soup.find_all(["h2", "h3", "h4", "a"]):
+            text = re.sub(r"\s+", " ", node.get_text(" ", strip=True))
+            season_match = re.search(r"(\d{1,2})\.\s*(?:série|serie|season)|(?:série|serie|season)\s*(\d{1,2})", text, re.I)
+            if season_match:
+                current_season = int(season_match.group(1) or season_match.group(2))
+                continue
+            if node.name != "a" or not node.get("href") or "/film/" not in node.get("href"):
+                continue
+
+            parsed = self._parse_episode_text(text, current_season)
+            if not parsed:
+                continue
+            season, episode, title = parsed
+            key = (season, episode, node.get("href"))
+            if key in seen:
+                continue
+            seen.add(key)
+            image = ""
+            image_node = node.find("img")
+            if image_node and image_node.get("src"):
+                image = urljoin(self.BASE_URL, image_node["src"])
+            episodes.append(
+                {
+                    "season": season,
+                    "episode": episode,
+                    "title": title,
+                    "plot": "",
+                    "poster": image,
+                    "fanart": image,
+                    "csfd_id": self._id_from_url(node.get("href")),
+                }
+            )
+        return episodes
+
+    def _parse_episode_text(self, text, current_season):
+        match = re.search(r"[sS](\d{1,2})\s*[eE](\d{1,3})\s*(?:[-–:]\s*)?(.*)$", text)
+        if match:
+            return int(match.group(1)), int(match.group(2)), match.group(3).strip()
+        match = re.search(r"(\d{1,3})\.\s*(?:díl|dil|epizoda|episode)\s*(?:[-–:]\s*)?(.*)$", text, re.I)
+        if match:
+            return current_season, int(match.group(1)), match.group(2).strip()
+        return None
+
+    def _clean_episode_metadata(self, seasons):
+        cleaned = []
+        for season in seasons:
+            season_number = self._safe_int(season.get("season"))
+            if not season_number:
+                continue
+            seen_episodes = set()
+            episodes = []
+            for episode in season.get("episodes") or []:
+                episode_number = self._safe_int(episode.get("episode"))
+                if not episode_number or episode_number in seen_episodes:
+                    continue
+                seen_episodes.add(episode_number)
+                episodes.append({**episode, "season": season_number, "episode": episode_number})
+            cleaned.append({**season, "season": season_number, "episodes": sorted(episodes, key=lambda item: item["episode"])})
+        return sorted(cleaned, key=lambda item: item["season"])
+
+    def _first_list(self, data, keys):
+        for key in keys:
+            value = data.get(key)
+            if isinstance(value, list):
+                return value
+        return []
+
+    def _first_text(self, data, keys):
+        for key in keys:
+            value = data.get(key)
+            if value:
+                if isinstance(value, list):
+                    return str(value[0]).strip() if value else ""
+                return str(value).strip()
+        return ""
+
+    def _first_int(self, data, keys, default=None):
+        for key in keys:
+            value = self._safe_int(data.get(key))
+            if value:
+                return value
+        return default
+
+    def _image_from_data(self, data):
+        for key in ("poster", "image", "photo", "obrazek_url", "imgo"):
+            value = self._first_text(data, (key,))
+            if value:
+                return "https:" + value if value.startswith("//") else value
+        return ""
+
+    def _id_from_url(self, url):
+        match = re.search(r"/film/(\d+)", str(url or ""))
+        return match.group(1) if match else None
 
     def _clean_czdb_value(self, value):
         text = str(value or "").strip()
@@ -316,6 +535,7 @@ class CSFDScraper:
             "plot": plot,
             "genres": data.get("genres") or [],
             "type": normalized_type,
+            "episode_metadata": self._normalize_episode_metadata(data),
         }
 
     def _best_search_link(self, soup, media_type=None):

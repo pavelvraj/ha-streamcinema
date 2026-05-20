@@ -2,6 +2,12 @@
 
 This file is intentionally duplicated at the repository root for Home Assistant compatibility. The add-on changelog source is `streamcinema/CHANGELOG.md`.
 
+## 0.3.25
+
+- Episode parsing now recognizes compact season/episode notation like `Hustle.403` as season 4, episode 3.
+- ČSFD metadata can now preserve season and episode details when provided by the configured ČSFD source, including season posters/descriptions and episode titles in the GUI.
+- Existing TV shows refresh ČSFD episode metadata during collection refresh when a ČSFD ID is available.
+
 ## 0.3.24
 
 - Search now runs as a backend job and the GUI polls live progress counts while providers are being processed.

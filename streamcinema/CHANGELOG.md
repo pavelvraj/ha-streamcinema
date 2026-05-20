@@ -2,6 +2,12 @@
 
 Všechny důležité změny add-onu StreamCinema API jsou vedené v tomto souboru.
 
+## 0.3.25
+
+- Parser dílů nově rozpozná kompaktní zápis série/dílu jako `Hustle.403`, tedy série 4, díl 3.
+- Metadata z ČSFD umí zachovat strukturu sérií a epizod, pokud ji nakonfigurovaný ČSFD zdroj vrátí, včetně obrázků/popisu sérií a názvů dílů v GUI.
+- U existujících seriálů se při aktualizaci sbírky doplní ČSFD metadata epizod, pokud má položka ČSFD ID.
+
 ## 0.3.24
 
 - Vyhledávání nově běží jako backendový job a GUI si průběžně načítá aktuální počty během prohledávání zdrojů.

@@ -15,6 +15,7 @@ STREAM_COLUMNS = {
 
 MEDIA_COLUMNS = {
     "search_query": "TEXT",
+    "episode_metadata": "TEXT",
 }
 
 def get_db_connection():
@@ -44,6 +45,7 @@ def init_db():
             imdb_id TEXT,
             csfd_id TEXT,
             search_query TEXT,
+            episode_metadata TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')

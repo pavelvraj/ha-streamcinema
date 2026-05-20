@@ -363,6 +363,43 @@
         return '<p class="series-summary">Nalezeno: ' + stats.seasons + ' sérií · ' + stats.episodes + ' dílů · ' + stats.streams + ' streamů</p>';
     }
 
+    function episodeMetadataLookup(metadata) {
+        var lookup = {};
+        var seasons = metadata && metadata.episode_metadata ? metadata.episode_metadata : [];
+        for (var i = 0; i < seasons.length; i += 1) {
+            var season = seasons[i] || {};
+            var seasonNumber = Number(season.season || 0);
+            if (!seasonNumber) continue;
+            lookup["s" + seasonNumber] = season;
+            var episodes = season.episodes || [];
+            for (var j = 0; j < episodes.length; j += 1) {
+                var episode = episodes[j] || {};
+                var episodeNumber = Number(episode.episode || 0);
+                if (!episodeNumber) continue;
+                lookup["s" + seasonNumber + "e" + episodeNumber] = episode;
+            }
+        }
+        return lookup;
+    }
+
+    function seasonSummaryLabel(number, seasonMeta) {
+        var title = seasonMeta && seasonMeta.title ? " - " + seasonMeta.title : "";
+        return "Série " + number + title;
+    }
+
+    function episodeTitleLabel(number, episodeMeta) {
+        var title = episodeMeta && episodeMeta.title ? " - " + episodeMeta.title : "";
+        return "Díl " + number + title;
+    }
+
+    function seasonMetaBlock(seasonMeta) {
+        if (!seasonMeta || (!seasonMeta.poster && !seasonMeta.plot)) return "";
+        return '<div class="season-meta">' +
+            (seasonMeta.poster ? '<div class="season-poster"><img src="' + escapeHtml(seasonMeta.poster) + '" alt=""></div>' : "") +
+            (seasonMeta.plot ? '<p>' + escapeHtml(seasonMeta.plot) + '</p>' : "") +
+            '</div>';
+    }
+
     function providerBadge(provider) {
         var cls = provider === "webshare" ? "badge-ws" : "badge-fs";
         return '<span class="provider-badge ' + cls + '">' + escapeHtml(provider || "-") + '</span>';
@@ -768,6 +805,7 @@
         var grouped = {};
         var loose = [];
         var seasons;
+        var meta = episodeMetadataLookup(currentSearch ? currentSearch.metadata : null);
         var html = '<h3>Série a díly</h3>' + renderSeriesSummary(streams) + '<div class="seasons search-seasons">';
 
         for (var i = 0; i < streams.length; i += 1) {
@@ -789,10 +827,11 @@
         for (var s = 0; s < seasons.length; s += 1) {
             var season = seasons[s];
             var episodes = Object.keys(grouped[season]).sort(function (a, b) { return Number(a) - Number(b); });
-            html += '<details open><summary>Série ' + escapeHtml(season) + '</summary>';
+            html += '<details open><summary>' + escapeHtml(seasonSummaryLabel(season, meta["s" + season])) + '</summary>' +
+                seasonMetaBlock(meta["s" + season]);
             for (var e = 0; e < episodes.length; e += 1) {
                 var episode = episodes[e];
-                html += '<div class="episode-block"><h4>Díl ' + escapeHtml(episode) + '</h4>' +
+                html += '<div class="episode-block"><h4>' + escapeHtml(episodeTitleLabel(episode, meta["s" + season + "e" + episode])) + '</h4>' +
                     renderSearchStreamTable(grouped[season][episode], "s" + season + "e" + episode, "search") +
                     '</div>';
             }
@@ -1021,11 +1060,15 @@
         var looseStreams = (item.streams || []).filter(function (stream) {
             return !stream.season || !stream.episode;
         });
+        var meta = episodeMetadataLookup(item);
         var html = '<h3>Série a díly</h3><div class="seasons">';
         html += item.seasons.map(function (season) {
-            return '<details open><summary>Série ' + season.season + '</summary>' +
+            var seasonMeta = meta["s" + season.season] || season;
+            return '<details open><summary>' + escapeHtml(seasonSummaryLabel(season.season, seasonMeta)) + '</summary>' +
+                seasonMetaBlock(seasonMeta) +
                 season.episodes.map(function (episode) {
-                    return '<div class="episode-block"><h4>Díl ' + episode.episode + '</h4>' + renderStreams(episode.streams) + '</div>';
+                    var episodeMeta = meta["s" + season.season + "e" + episode.episode] || episode;
+                    return '<div class="episode-block"><h4>' + escapeHtml(episodeTitleLabel(episode.episode, episodeMeta)) + '</h4>' + renderStreams(episode.streams) + '</div>';
                 }).join("") +
                 '</details>';
         }).join("");
@@ -1306,6 +1349,7 @@
         var grouped = {};
         var loose = [];
         var seasons;
+        var meta = episodeMetadataLookup(currentRefresh ? currentRefresh.media : null);
         var html = '<h3>Série a díly</h3>' + renderSeriesSummary(streams) + '<div class="seasons search-seasons">';
         for (var i = 0; i < streams.length; i += 1) {
             var stream = streams[i];
@@ -1322,10 +1366,11 @@
         for (var s = 0; s < seasons.length; s += 1) {
             var season = seasons[s];
             var episodes = Object.keys(grouped[season]).sort(function (a, b) { return Number(a) - Number(b); });
-            html += '<details open><summary>Série ' + escapeHtml(season) + '</summary>';
+            html += '<details open><summary>' + escapeHtml(seasonSummaryLabel(season, meta["s" + season])) + '</summary>' +
+                seasonMetaBlock(meta["s" + season]);
             for (var e = 0; e < episodes.length; e += 1) {
                 var episode = episodes[e];
-                html += '<div class="episode-block"><h4>Díl ' + escapeHtml(episode) + '</h4>' + renderSearchStreamTable(grouped[season][episode], "refresh-s" + season + "e" + episode, "refresh") + '</div>';
+                html += '<div class="episode-block"><h4>' + escapeHtml(episodeTitleLabel(episode, meta["s" + season + "e" + episode])) + '</h4>' + renderSearchStreamTable(grouped[season][episode], "refresh-s" + season + "e" + episode, "refresh") + '</div>';
             }
             html += '</details>';
         }
