@@ -746,6 +746,18 @@ def group_episodes(streams, episode_metadata=None):
         seasons.setdefault(str(season), {}).setdefault(str(episode), []).append(stream)
 
     metadata_lookup = episode_metadata_lookup(episode_metadata)
+    for season_meta in episode_metadata or []:
+        season_number = season_meta.get("season")
+        if season_number is None:
+            continue
+        season_key = str(int(season_number))
+        seasons.setdefault(season_key, {})
+        for episode_meta in season_meta.get("episodes") or []:
+            episode_number = episode_meta.get("episode")
+            if episode_number is None:
+                continue
+            seasons[season_key].setdefault(str(int(episode_number)), [])
+
     return [
         {
             "season": int(season),
@@ -770,6 +782,66 @@ def group_episodes(streams, episode_metadata=None):
         }
         for season, episodes in sorted(seasons.items(), key=lambda item: int(item[0]))
     ]
+
+
+def update_episode_metadata_value(existing_metadata, season_number, episode_number=None, updates=None):
+    updates = updates or {}
+    seasons = safe_json_loads(json_dumps(existing_metadata), [])
+    season_number = int(season_number)
+    episode_number = int(episode_number) if episode_number is not None else None
+
+    season = None
+    for item in seasons:
+        if int(item.get("season") or 0) == season_number:
+            season = item
+            break
+    if season is None:
+        season = {"season": season_number, "title": "", "plot": "", "poster": "", "fanart": "", "episodes": []}
+        seasons.append(season)
+
+    if episode_number is None:
+        for key in ("title", "plot", "poster", "fanart"):
+            if key in updates:
+                season[key] = str(updates.get(key) or "").strip()
+        if "poster" in updates and "fanart" not in updates:
+            season["fanart"] = season.get("poster") or ""
+    else:
+        episodes = season.setdefault("episodes", [])
+        episode = None
+        for item in episodes:
+            if int(item.get("episode") or 0) == episode_number:
+                episode = item
+                break
+        if episode is None:
+            episode = {"season": season_number, "episode": episode_number, "title": "", "plot": "", "poster": "", "fanart": ""}
+            episodes.append(episode)
+        episode["season"] = season_number
+        episode["episode"] = episode_number
+        for key in ("title", "plot", "poster", "fanart"):
+            if key in updates:
+                episode[key] = str(updates.get(key) or "").strip()
+        if "poster" in updates and "fanart" not in updates:
+            episode["fanart"] = episode.get("poster") or ""
+
+    return sorted(
+        [
+            {
+                **season,
+                "season": int(season.get("season") or 0),
+                "episodes": sorted(
+                    [
+                        {**episode, "season": int(season.get("season") or 0), "episode": int(episode.get("episode") or 0)}
+                        for episode in season.get("episodes") or []
+                        if int(episode.get("episode") or 0)
+                    ],
+                    key=lambda item: item["episode"],
+                ),
+            }
+            for season in seasons
+            if int(season.get("season") or 0)
+        ],
+        key=lambda item: item["season"],
+    )
 
 
 def serialize_media_row(conn, row, include_streams=True):
@@ -938,7 +1010,7 @@ def render_search_page(result):
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Stream Cinema - výsledky</title>
-        <link rel="stylesheet" href="../static/style.css?v=0.3.25">
+        <link rel="stylesheet" href="../static/style.css?v=0.3.26">
     </head>
     <body>
         <div class="app-shell">
@@ -1261,6 +1333,45 @@ def update_media(media_id: str, payload: dict = Body(...)):
             ),
         )
         refresh_stream_grouping(conn, media_id)
+        conn.commit()
+        row = conn.execute("SELECT * FROM media WHERE id=?", (media_id,)).fetchone()
+        return serialize_media_row(conn, row, include_streams=True)
+    finally:
+        conn.close()
+
+
+@app.put("/api/media/{media_id}/episode_metadata")
+def update_media_episode_metadata(media_id: str, payload: dict = Body(...)):
+    conn = get_db_connection()
+    try:
+        row = conn.execute("SELECT * FROM media WHERE id=?", (media_id,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Media not found")
+
+        try:
+            season = int(payload.get("season"))
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=400, detail="Invalid season")
+
+        episode = payload.get("episode")
+        try:
+            episode = int(episode) if episode not in (None, "") else None
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=400, detail="Invalid episode")
+
+        current = dict(row)
+        metadata = update_episode_metadata_value(
+            safe_json_loads(current.get("episode_metadata"), []),
+            season,
+            episode,
+            {
+                "title": payload.get("title"),
+                "plot": payload.get("plot"),
+                "poster": payload.get("poster"),
+                "fanart": payload.get("fanart"),
+            },
+        )
+        conn.execute("UPDATE media SET episode_metadata=? WHERE id=?", (json_dumps(metadata), media_id))
         conn.commit()
         row = conn.execute("SELECT * FROM media WHERE id=?", (media_id,)).fetchone()
         return serialize_media_row(conn, row, include_streams=True)

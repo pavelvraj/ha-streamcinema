@@ -392,12 +392,51 @@
         return "Díl " + number + title;
     }
 
-    function seasonMetaBlock(seasonMeta) {
-        if (!seasonMeta || (!seasonMeta.poster && !seasonMeta.plot)) return "";
-        return '<div class="season-meta">' +
-            (seasonMeta.poster ? '<div class="season-poster"><img src="' + escapeHtml(seasonMeta.poster) + '" alt=""></div>' : "") +
-            (seasonMeta.plot ? '<p>' + escapeHtml(seasonMeta.plot) + '</p>' : "") +
+    function metadataEditScope(season, episode) {
+        return "s" + season + (episode ? "e" + episode : "");
+    }
+
+    function metadataEditButton(mediaId, season, episode) {
+        return '<button type="button" class="icon-button" title="Upravit metadata" data-action="open-episode-meta-edit" data-id="' + escapeHtml(mediaId) + '" data-season="' + escapeHtml(season) + '"' + (episode ? ' data-episode="' + escapeHtml(episode) + '"' : "") + '>✎</button>';
+    }
+
+    function metadataEditForm(mediaId, season, episode, meta, label) {
+        var scope = metadataEditScope(season, episode);
+        meta = meta || {};
+        return '<div id="episodeMetaForm-' + escapeHtml(scope) + '" class="metadata-edit-form hidden">' +
+            '<label>Název<input id="episodeMetaTitle-' + escapeHtml(scope) + '" type="text" value="' + escapeHtml(meta.title || "") + '"></label>' +
+            '<label>Náhled<input id="episodeMetaPoster-' + escapeHtml(scope) + '" type="text" value="' + escapeHtml(meta.poster || "") + '" placeholder="https://..."></label>' +
+            '<label>Popis<textarea id="episodeMetaPlot-' + escapeHtml(scope) + '" rows="3">' + escapeHtml(meta.plot || "") + '</textarea></label>' +
+            '<div class="metadata-edit-actions">' +
+                '<button type="button" class="icon-button" title="Uložit" data-action="save-episode-meta" data-id="' + escapeHtml(mediaId) + '" data-season="' + escapeHtml(season) + '"' + (episode ? ' data-episode="' + escapeHtml(episode) + '"' : "") + '>💾</button>' +
+                '<button type="button" class="icon-button" title="Storno" data-action="cancel-episode-meta-edit" data-season="' + escapeHtml(season) + '"' + (episode ? ' data-episode="' + escapeHtml(episode) + '"' : "") + '>×</button>' +
+                '<span class="muted-inline">' + escapeHtml(label || "") + '</span>' +
+            '</div>' +
+        '</div>';
+    }
+
+    function seasonMetaBlock(seasonMeta, mediaId, seasonNumber) {
+        var scope = metadataEditScope(seasonNumber, null);
+        seasonMeta = seasonMeta || {};
+        if (!mediaId && !seasonMeta.poster && !seasonMeta.plot) return "";
+        return '<div id="episodeMetaView-' + escapeHtml(scope) + '" class="season-meta ' + (!seasonMeta.poster && !seasonMeta.plot ? "metadata-empty" : "") + '">' +
+            (seasonMeta.poster ? '<div class="season-poster"><img src="' + escapeHtml(seasonMeta.poster) + '" alt=""></div>' : '<div class="season-poster empty-thumb">Bez náhledu</div>') +
+            '<div>' +
+                (seasonMeta.plot ? '<p>' + escapeHtml(seasonMeta.plot) + '</p>' : '<p class="muted-inline">Bez popisu série.</p>') +
+            '</div>' +
             '</div>';
+    }
+
+    function episodeMetaBlock(episodeMeta, mediaId, seasonNumber, episodeNumber) {
+        var scope = metadataEditScope(seasonNumber, episodeNumber);
+        episodeMeta = episodeMeta || {};
+        if (!mediaId && !episodeMeta.poster && !episodeMeta.plot) return "";
+        return '<div id="episodeMetaView-' + escapeHtml(scope) + '" class="episode-meta ' + (!episodeMeta.poster && !episodeMeta.plot ? "metadata-empty" : "") + '">' +
+            (episodeMeta.poster ? '<div class="episode-poster"><img src="' + escapeHtml(episodeMeta.poster) + '" alt=""></div>' : '<div class="episode-poster empty-thumb">Bez náhledu</div>') +
+            '<div>' +
+                (episodeMeta.plot ? '<p>' + escapeHtml(episodeMeta.plot) + '</p>' : '<p class="muted-inline">Bez popisu dílu.</p>') +
+            '</div>' +
+        '</div>';
     }
 
     function providerBadge(provider) {
@@ -828,7 +867,7 @@
             var season = seasons[s];
             var episodes = Object.keys(grouped[season]).sort(function (a, b) { return Number(a) - Number(b); });
             html += '<details open><summary>' + escapeHtml(seasonSummaryLabel(season, meta["s" + season])) + '</summary>' +
-                seasonMetaBlock(meta["s" + season]);
+                seasonMetaBlock(meta["s" + season], null, season);
             for (var e = 0; e < episodes.length; e += 1) {
                 var episode = episodes[e];
                 html += '<div class="episode-block"><h4>' + escapeHtml(episodeTitleLabel(episode, meta["s" + season + "e" + episode])) + '</h4>' +
@@ -1064,11 +1103,19 @@
         var html = '<h3>Série a díly</h3><div class="seasons">';
         html += item.seasons.map(function (season) {
             var seasonMeta = meta["s" + season.season] || season;
-            return '<details open><summary>' + escapeHtml(seasonSummaryLabel(season.season, seasonMeta)) + '</summary>' +
-                seasonMetaBlock(seasonMeta) +
+            return '<details open><summary><span>' + escapeHtml(seasonSummaryLabel(season.season, seasonMeta)) + '</span>' +
+                metadataEditButton(item._id, season.season, null) + '</summary>' +
+                seasonMetaBlock(seasonMeta, item._id, season.season) +
+                metadataEditForm(item._id, season.season, null, seasonMeta, "Série " + season.season) +
                 season.episodes.map(function (episode) {
                     var episodeMeta = meta["s" + season.season + "e" + episode.episode] || episode;
-                    return '<div class="episode-block"><h4>' + escapeHtml(episodeTitleLabel(episode.episode, episodeMeta)) + '</h4>' + renderStreams(episode.streams) + '</div>';
+                    return '<div class="episode-block">' +
+                        '<h4><span>' + escapeHtml(episodeTitleLabel(episode.episode, episodeMeta)) + '</span>' +
+                            metadataEditButton(item._id, season.season, episode.episode) + '</h4>' +
+                        episodeMetaBlock(episodeMeta, item._id, season.season, episode.episode) +
+                        metadataEditForm(item._id, season.season, episode.episode, episodeMeta, "Série " + season.season + ", díl " + episode.episode) +
+                        renderStreams(episode.streams) +
+                    '</div>';
                 }).join("") +
                 '</details>';
         }).join("");
@@ -1367,7 +1414,7 @@
             var season = seasons[s];
             var episodes = Object.keys(grouped[season]).sort(function (a, b) { return Number(a) - Number(b); });
             html += '<details open><summary>' + escapeHtml(seasonSummaryLabel(season, meta["s" + season])) + '</summary>' +
-                seasonMetaBlock(meta["s" + season]);
+                seasonMetaBlock(meta["s" + season], null, season);
             for (var e = 0; e < episodes.length; e += 1) {
                 var episode = episodes[e];
                 html += '<div class="episode-block"><h4>' + escapeHtml(episodeTitleLabel(episode, meta["s" + season + "e" + episode])) + '</h4>' + renderSearchStreamTable(grouped[season][episode], "refresh-s" + season + "e" + episode, "refresh") + '</div>';
@@ -1433,6 +1480,56 @@
             .catch(function (error) {
                 console.error(error);
                 showStatus("Přidání nových streamů selhalo.", "error");
+            });
+    }
+
+    function openEpisodeMetadataEdit(target) {
+        var season = target.getAttribute("data-season");
+        var episode = target.getAttribute("data-episode");
+        var scope = metadataEditScope(season, episode);
+        var view = el("episodeMetaView-" + scope);
+        var form = el("episodeMetaForm-" + scope);
+        if (view) view.classList.add("hidden");
+        if (form) form.classList.remove("hidden");
+    }
+
+    function cancelEpisodeMetadataEdit(target) {
+        var season = target.getAttribute("data-season");
+        var episode = target.getAttribute("data-episode");
+        var scope = metadataEditScope(season, episode);
+        var view = el("episodeMetaView-" + scope);
+        var form = el("episodeMetaForm-" + scope);
+        if (form) form.classList.add("hidden");
+        if (view) view.classList.remove("hidden");
+    }
+
+    function saveEpisodeMetadata(target) {
+        var mediaId = target.getAttribute("data-id");
+        var season = target.getAttribute("data-season");
+        var episode = target.getAttribute("data-episode");
+        var scope = metadataEditScope(season, episode);
+        var title = el("episodeMetaTitle-" + scope);
+        var poster = el("episodeMetaPoster-" + scope);
+        var plot = el("episodeMetaPlot-" + scope);
+        showStatus("Ukládám metadata série/dílu...", "info");
+        requestJson(API_URL + "/media/" + encodeURIComponent(mediaId) + "/episode_metadata", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                season: Number(season),
+                episode: episode ? Number(episode) : null,
+                title: title ? title.value : "",
+                poster: poster ? poster.value : "",
+                plot: plot ? plot.value : "",
+            }),
+        })
+            .then(function () {
+                showStatus("Metadata byla uložena.", "success");
+                return showDetail(mediaId);
+            })
+            .catch(function (error) {
+                console.error(error);
+                showStatus(errorMessage(error, "Uložení metadat selhalo."), "error");
             });
     }
 
@@ -1521,6 +1618,21 @@
         if (action === "open-media-edit") openMediaEditForm();
         if (action === "cancel-media-edit") cancelMediaEdit(id || selectedMediaId);
         if (action === "save-media") saveMediaEdits(id);
+        if (action === "open-episode-meta-edit") {
+            event.preventDefault();
+            event.stopPropagation();
+            openEpisodeMetadataEdit(target);
+        }
+        if (action === "cancel-episode-meta-edit") {
+            event.preventDefault();
+            event.stopPropagation();
+            cancelEpisodeMetadataEdit(target);
+        }
+        if (action === "save-episode-meta") {
+            event.preventDefault();
+            event.stopPropagation();
+            saveEpisodeMetadata(target);
+        }
         if (action === "delete-media") deleteMedia(id);
         if (action === "play-stream") {
             event.preventDefault();

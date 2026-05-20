@@ -1,5 +1,5 @@
 name: "StreamCinema API"
-version: "0.3.25"
+version: "0.3.26"
 slug: "streamcinema"
 description: "Vlastni StreamCinema backend s Webshare a Fastshare hledanim"
 arch:

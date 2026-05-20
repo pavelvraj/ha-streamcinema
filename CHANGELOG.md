@@ -2,6 +2,12 @@
 
 This file is intentionally duplicated at the repository root for Home Assistant compatibility. The add-on changelog source is `streamcinema/CHANGELOG.md`.
 
+## 0.3.26
+
+- The collection now shows stored ČSFD season posters/descriptions and episode titles, including metadata-only episodes before streams are assigned.
+- Season and episode metadata can be edited inline with pencil/save/cancel controls.
+- Collection refresh keeps re-checking ČSFD episode metadata and updates the stored season/episode details when available.
+
 ## 0.3.25
 
 - Episode parsing now recognizes compact season/episode notation like `Hustle.403` as season 4, episode 3.
